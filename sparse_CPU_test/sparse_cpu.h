@@ -1,0 +1,445 @@
+/* Copyright 2019 The TensorFlow Authors. All Rights Reserved.
+
+Licensed under the Apache License, Version 2.0 (the "License");
+you may not use this file except in compliance with the License.
+You may obtain a copy of the License at
+
+    http://www.apache.org/licenses/LICENSE-2.0
+
+Unless required by applicable law or agreed to in writing, software
+distributed under the License is distributed on an "AS IS" BASIS,
+WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+See the License for the specific language governing permissions and
+limitations under the License.
+==============================================================================*/
+#ifndef TENSORFLOW_LITE_KERNELS_INTERNAL_REFERENCE_INTEGER_OPS_CONV_H_
+#define TENSORFLOW_LITE_KERNELS_INTERNAL_REFERENCE_INTEGER_OPS_CONV_H_
+
+#include <algorithm>
+
+#include "tensorflow/lite/kernels/internal/common.h"
+#include "tensorflow/lite/kernels/internal/portable_tensor_utils.h"
+#include "playground_util/print_params.h"
+#include "cfu.h"
+#include "perf.h"
+#include <cstdio>
+namespace tflite {
+namespace reference_integer_ops {
+
+// Fixed-point per-channel-quantization convolution reference kernel.
+inline void ConvPerChannel(
+    const ConvParams& params, const int32_t* output_multiplier,
+    const int32_t* output_shift, const RuntimeShape& input_shape,
+    const int8_t* input_data, const RuntimeShape& filter_shape,
+    const int8_t* filter_data, const RuntimeShape& bias_shape,
+    const int32_t* bias_data, const RuntimeShape& output_shape,
+    int8_t* output_data) {
+    print_conv_params(params, input_shape, filter_shape, output_shape);
+    perf_enable_counter(6);
+    uint64_t start_time = perf_get_mcycle64();
+    uint64_t tmp_start_time = perf_get_mcycle64();
+    const int K_max = 8000; // filter_w * filter_h * input_depth. -
+    const int M_max = 148; // out_w * out_h.
+    const int N_max = 2000; // out_ch
+    int8_t im2col[M_max][K_max];
+    int8_t kernel[N_max][5000];
+    int16_t kernel_nonzero_idx[N_max][5000];
+  // Get parameters.
+  const int32_t input_offset = params.input_offset;  // r = s(q - Z)
+  const int stride_width = params.stride_width;
+  const int stride_height = params.stride_height;
+  const int dilation_width_factor = params.dilation_width_factor;
+  const int dilation_height_factor = params.dilation_height_factor;
+  const int pad_width = params.padding_values.width;
+  const int pad_height = params.padding_values.height;
+  const int32_t output_offset = params.output_offset;
+
+  // Set min and max value of the output.
+  const int32_t output_activation_min = params.quantized_activation_min;
+  const int32_t output_activation_max = params.quantized_activation_max;
+
+  // Consistency check.
+  TFLITE_DCHECK_LE(output_activation_min, output_activation_max);
+  TFLITE_DCHECK_EQ(input_shape.DimensionsCount(), 4);
+  TFLITE_DCHECK_EQ(filter_shape.DimensionsCount(), 4);
+  TFLITE_DCHECK_EQ(output_shape.DimensionsCount(), 4);
+  const int batches = MatchingDim(input_shape, 0, output_shape, 0);
+  const int input_depth = input_shape.Dims(3);
+  const int output_depth = MatchingDim(filter_shape, 0, output_shape, 3);
+  if (bias_data) {
+    TFLITE_DCHECK_EQ(bias_shape.FlatSize(), output_depth);
+  }
+
+  // Check dimensions of the tensors.
+  const int input_height = input_shape.Dims(1);
+  const int input_width = input_shape.Dims(2);
+  const int filter_height = filter_shape.Dims(1);
+  const int filter_width = filter_shape.Dims(2);
+  const int filter_input_depth = filter_shape.Dims(3);
+  // const int groups = input_depth / filter_input_depth;
+  TFLITE_DCHECK_EQ(input_depth % filter_input_depth, 0);
+  // const int filters_per_group = output_depth / groups;
+  const int output_height = output_shape.Dims(1);
+  const int output_width = output_shape.Dims(2);
+  uint64_t tmp_end_time = perf_get_mcycle64();
+  printf("preprocess took: ");
+  perf_print_value(tmp_end_time - tmp_start_time);
+  printf(" cycles\n");
+  // convert filter
+  tmp_start_time = perf_get_mcycle64();
+  int max_nonzero_count = 0;
+  int total_nonzero_count = 0;
+  int total_amount = 0;
+  for(int out_channel = 0; out_channel < output_depth;++out_channel){
+    int filter_i = 0; // filter_w * filter_h * input_depth
+    int nonzero_count = 0;
+    for (int filter_y = 0; filter_y < filter_height; ++filter_y) {
+      for (int filter_x = 0; filter_x < filter_width; ++filter_x) {
+        for (int in_channel = 0; in_channel < filter_input_depth;
+              ++in_channel) {
+          int8_t filter_val = static_cast<int8_t>(filter_data[Offset(
+            filter_shape, out_channel, filter_y, filter_x, in_channel)]);
+          if (filter_val != 0) {
+            kernel_nonzero_idx[out_channel][nonzero_count+1] = filter_i;
+            kernel[out_channel][nonzero_count] = filter_val;
+            nonzero_count++;
+            total_nonzero_count++;
+          }
+          filter_i++;
+          total_amount++;
+        }
+      }
+    }
+    kernel_nonzero_idx[out_channel][0] = nonzero_count;
+    if(nonzero_count % 4 != 0){
+      int pad_count = 4 - (nonzero_count %4);
+      for(int pad_i = 0; pad_i < pad_count; ++pad_i){
+        kernel_nonzero_idx[out_channel][nonzero_count + pad_i +1] = 0;
+        kernel[out_channel][nonzero_count + pad_i] = 0;
+      }
+      nonzero_count += pad_count;
+      kernel_nonzero_idx[out_channel][0] = nonzero_count;
+    }
+    if (nonzero_count > max_nonzero_count) {
+      max_nonzero_count = nonzero_count;
+    }
+  } 
+  printf("filter convert took: ");
+  tmp_end_time = perf_get_mcycle64();
+  perf_print_value(tmp_end_time - tmp_start_time);
+  printf(" cycles\n");
+  /* Use double arithmetic to avoid float->double promotion warnings
+    (compiler with -Wdouble-promotion treats implicit promotions as errors). */
+  printf("nonzero rate is: %d/%d\n", total_nonzero_count, total_amount);
+  // convert image 
+  tmp_start_time = perf_get_mcycle64();
+  for (int batch = 0; batch < batches; ++batch) {
+    int patch_i = 0; // out_w * out_h.
+    for (int out_y = 0; out_y < output_height; ++out_y) {
+      const int in_y_origin = (out_y * stride_height) - pad_height;
+      for (int out_x = 0; out_x < output_width; ++out_x) {
+        const int in_x_origin = (out_x * stride_width) - pad_width;
+        int patch_j = 0; // filter_w * filter_h * input_depth
+        for (int filter_y = 0; filter_y < filter_height; ++filter_y) {
+          const int in_y = in_y_origin + dilation_height_factor * filter_y;
+          for (int filter_x = 0; filter_x < filter_width; ++filter_x) {
+            const int in_x = in_x_origin + dilation_width_factor * filter_x;
+
+            // Zero padding by omitting the areas outside the image.
+            const bool is_point_inside_image =
+                (in_x >= 0) && (in_x < input_width) && (in_y >= 0) &&
+                (in_y < input_height);
+
+            // if (!is_point_inside_image) {
+            //   continue;
+            // }
+
+            for (int in_channel = 0; in_channel < filter_input_depth;
+                  ++in_channel) {
+              im2col[patch_i][patch_j++] = is_point_inside_image ? static_cast<int8_t>(input_data[Offset(input_shape, batch, in_y, in_x,
+                                        in_channel)])
+                                        : static_cast<int8_t>(-input_offset);
+            }
+          }
+        }
+        patch_i++;
+      }
+    }
+  }
+  printf("image convert took: ");
+  tmp_end_time = perf_get_mcycle64();
+  perf_print_value(tmp_end_time - tmp_start_time);
+  printf(" cycles\n");
+
+  // cal part
+  int M = output_height * output_width;
+  int N = output_depth;
+  int K = filter_height * filter_width * filter_input_depth;
+  printf("in this layer, K is %d, max_nonzero_count is %d\n", K, max_nonzero_count);
+  printf("M is %d, N is %d, K is %d\n", M, N, K);
+  // evaluation correctness
+  // int8_t reference_output[M_max][N_max];
+  for (int idx = 0; idx < M; ++idx) {
+    for(int out_channel = 0; out_channel < N;++out_channel){
+      int32_t acc = 0;
+      int nonzero_kernel_count = kernel_nonzero_idx[out_channel][0];
+      for(int nz_idx = 0;nz_idx < nonzero_kernel_count;++nz_idx){
+        int nz_kernel_idx = kernel_nonzero_idx[out_channel][nz_idx+1];
+        if(nz_kernel_idx != -1){
+          acc += (im2col[idx][nz_kernel_idx] + input_offset) * kernel[out_channel][nz_idx];
+        }
+      }
+      if (bias_data) {
+        acc += bias_data[out_channel];
+      }
+      acc = MultiplyByQuantizedMultiplier(
+          acc, output_multiplier[out_channel], output_shift[out_channel]);
+      acc += output_offset;
+      acc = std::max(acc, output_activation_min);
+      acc = std::min(acc, output_activation_max);
+      // reference_output[idx][out_channel] = static_cast<int8_t>(acc);
+      // output_data[Offset(output_shape, 0, idx / output_width, idx % output_width, out_channel)] = reference_output[idx][out_channel];
+       output_data[Offset(output_shape, 0, idx / output_width, idx % output_width, out_channel)] = static_cast<int8_t>(acc);
+
+    }
+  }
+  //----------------
+
+  // uint64_t filter_load_time = 0;
+  // uint64_t kernel_load_time = 0;
+  // uint64_t compute_and_out_time = 0;
+  // int out_of_bound = 0;
+  // int error_count = 0;
+  // cfu_op0(/* funct7= */ 4, /* in0= */0 ,/* in1= */ input_offset);
+  // int input_M;
+  // if(K == 8000) input_M = 52;
+  // else input_M = (M+3)/4*4;
+  // for(int out_channel = 0; out_channel < N;++out_channel){
+  //   int nonzero_kernel_count = kernel_nonzero_idx[out_channel][0];
+  //   cfu_op0(/* funct7= */ 3, /* in0= */input_M, /* in1= */ nonzero_kernel_count);
+  //   tmp_start_time = perf_get_mcycle64();
+  //   for(int nz_idx = 0;nz_idx < nonzero_kernel_count;nz_idx+=4){
+  //     uint32_t filter =  static_cast<uint8_t>(kernel[out_channel][nz_idx]) << 24 |
+  //                      static_cast<uint8_t>(kernel[out_channel][nz_idx+1]) << 16 |
+  //                      static_cast<uint8_t>(kernel[out_channel][nz_idx+2]) << 8  |
+  //                      static_cast<uint8_t>(kernel[out_channel][nz_idx+3]);
+  //     // uint32_t filter = *((uint32_t *)(kernel + out_channel * 5000 + nz_idx));
+  //     cfu_op0(/* funct7= */ 1, /* in0= */ filter, /* in1= */ 0);
+  //     // int nz_kernel_idx = kernel_nonzero_idx[out_channel][nz_idx+1];
+  //     // if(nz_kernel_idx != -1){
+  //     //   acc += (im2col[idx][nz_kernel_idx] + input_offset) * kernel[out_channel][nz_idx];
+  //     // }
+  //   }
+  //   tmp_end_time = perf_get_mcycle64();
+  //   filter_load_time += (tmp_end_time - tmp_start_time);
+  //   int tmp_M = (M+3)/4*4;
+  //   int iter_val = 1;
+  //   if(K == 8000){ 
+  //     tmp_M = 52;
+  //     iter_val = 3;
+  //   }
+  //   for(int iter = 0,start_idx = 0;iter < iter_val;iter++, start_idx += tmp_M){
+  //     // printf("start_idx is %d\nstart_idx + tmp_M is %d\n", start_idx, start_idx + tmp_M);
+
+  //     tmp_start_time = perf_get_mcycle64();
+  //     if(iter == 2){
+  //       tmp_M = 44;
+  //       cfu_op0(/* funct7= */ 3, /* in0= */44, /* in1= */ nonzero_kernel_count);
+  //     }
+  //     for (int idx = start_idx; idx < start_idx + tmp_M; ++idx) {
+  //       for(int nz_idx = 0;nz_idx < nonzero_kernel_count;nz_idx+=4){
+  //         if(idx >= M){
+  //           cfu_op0(/* funct7= */ 0, /* in0= */ 0, /* in1= */ 0);
+  //           out_of_bound = 1;
+  //         }
+  //         else{
+  //           int nz_kernel_idx = kernel_nonzero_idx[out_channel][nz_idx+1]; 
+  //           int nz_kernel_idx2 = kernel_nonzero_idx[out_channel][nz_idx+2]; 
+  //           int nz_kernel_idx3 = kernel_nonzero_idx[out_channel][nz_idx+3]; 
+  //           int nz_kernel_idx4 = kernel_nonzero_idx[out_channel][nz_idx+4]; 
+  //           uint32_t img = static_cast<uint8_t>(im2col[idx][nz_kernel_idx]) << 24 |
+  //                          static_cast<uint8_t>(im2col[idx][nz_kernel_idx2]) << 16 | 
+  //                          static_cast<uint8_t>(im2col[idx][nz_kernel_idx3]) << 8 | 
+  //                          static_cast<uint8_t>(im2col[idx][nz_kernel_idx4]);
+  //           cfu_op0(/* funct7= */ 0, /* in0= */ img, /* in1= */ 0);
+  //         }
+  //       }
+  //     }
+  //     tmp_end_time = perf_get_mcycle64();
+  //     kernel_load_time += (tmp_end_time - tmp_start_time);
+  //     tmp_start_time = perf_get_mcycle64();
+  //     for (int idx = start_idx; idx < start_idx + tmp_M; ++idx) {
+  //       int32_t res = cfu_op0(/* funct7= */ 2, /* in0= */ 0, /* in1= */ 0);
+  //       if(idx >= M) {
+  //         out_of_bound = 1;
+  //         continue;
+  //       }
+  //       if (bias_data) {
+  //         res += bias_data[out_channel];
+  //       }
+  //       res = MultiplyByQuantizedMultiplier(
+  //           res, output_multiplier[out_channel], output_shift[out_channel]);
+  //       res += output_offset;
+  //       res = std::max(res, output_activation_min);
+  //       res = std::min(res, output_activation_max);
+  //       output_data[Offset(output_shape, 0, idx / output_width, idx % output_width, out_channel)] = static_cast<int8_t>(res);
+  //       if(reference_output[idx][out_channel] != static_cast<int8_t>(res)){
+  //         if(error_count == 0){
+  //           printf("first wrong at output idx %d, out_channel %d, ref is %d, cal is %d\n", idx, out_channel, reference_output[idx][out_channel], static_cast<int8_t>(res));
+  //         }
+  //         error_count++;
+  //         output_data[Offset(output_shape, 0, idx / output_width, idx % output_width, out_channel)] = reference_output[idx][out_channel];
+  //       }
+  //     }
+  //     tmp_end_time = perf_get_mcycle64();
+  //     compute_and_out_time += (tmp_end_time - tmp_start_time);
+  //   }
+  // }
+  // if(out_of_bound == 1){
+  //   printf("out of bound happened!\n");
+  // }
+  // else{
+  //   printf("no out of bound happened!\n");
+  // }
+  // if(error_count == 0){
+  //   printf("no error happened!\n");
+  // } else {
+  //   printf("total error count is %d\n", error_count);
+  // }
+  // printf("filter load took: ");
+  // perf_print_value(filter_load_time);
+  // printf(" cycles\n");
+  // printf("kernel load took: ");
+  // perf_print_value(kernel_load_time);
+  // printf(" cycles\n");
+  // printf("compute and output took: ");
+  // perf_print_value(compute_and_out_time);
+  // printf(" cycles\n");
+  perf_disable_counter(6);
+  uint64_t end_time = perf_get_mcycle64();
+  printf("total convolution took: ");
+  perf_print_value(end_time - start_time);
+  printf(" cycles\n\n");
+  // if(M == 148 && N == 29){
+  //   perf_print_all_counters();
+  // }
+}
+
+inline void ConvPerChannelWithPackedInt4Weights(
+    const ConvParams& params, const int32_t* output_multiplier,
+    const int32_t* output_shift, const RuntimeShape& input_shape,
+    const int8_t* input_data, const RuntimeShape& filter_shape,
+    const int8_t* filter_input, int8_t* unpacked_filter_data,
+    const RuntimeShape& bias_shape, const int32_t* bias_data,
+    const RuntimeShape& output_shape, int8_t* output_data) {
+  TFLITE_DCHECK(unpacked_filter_data != nullptr);
+  tflite::tensor_utils::UnpackDenseInt4IntoInt8(
+      filter_input, filter_shape.FlatSize(), unpacked_filter_data);
+  ConvPerChannel(params, output_multiplier, output_shift, input_shape,
+                 input_data, filter_shape, unpacked_filter_data, bias_shape,
+                 bias_data, output_shape, output_data);
+}
+
+// Fixed-point per-channel-quantization convolution reference kernel.
+// 16-bit data and 8-bit filter
+template <typename AccumScalar>
+inline void ConvPerChannel(
+    const ConvParams& params, const int32_t* output_multiplier,
+    const int32_t* output_shift, const RuntimeShape& input_shape,
+    const int16_t* input_data, const RuntimeShape& filter_shape,
+    const int8_t* filter_data, const RuntimeShape& bias_shape,
+    const AccumScalar* bias_data, const RuntimeShape& output_shape,
+    int16_t* output_data) {
+  // Get parameters.
+  const int stride_width = params.stride_width;
+  const int stride_height = params.stride_height;
+  const int dilation_width_factor = params.dilation_width_factor;
+  const int dilation_height_factor = params.dilation_height_factor;
+  const int pad_width = params.padding_values.width;
+  const int pad_height = params.padding_values.height;
+
+  // Set min and max value of the output.
+  const int32_t output_activation_min = params.quantized_activation_min;
+  const int32_t output_activation_max = params.quantized_activation_max;
+
+  // Consistency check.
+  TFLITE_DCHECK_LE(output_activation_min, output_activation_max);
+  TFLITE_DCHECK_EQ(input_shape.DimensionsCount(), 4);
+  TFLITE_DCHECK_EQ(filter_shape.DimensionsCount(), 4);
+  TFLITE_DCHECK_EQ(output_shape.DimensionsCount(), 4);
+  const int batches = MatchingDim(input_shape, 0, output_shape, 0);
+  const int input_depth = input_shape.Dims(3);
+  const int output_depth = MatchingDim(filter_shape, 0, output_shape, 3);
+  if (bias_data) {
+    TFLITE_DCHECK_EQ(bias_shape.FlatSize(), output_depth);
+  }
+
+  // Check dimensions of the tensors.
+  const int input_height = input_shape.Dims(1);
+  const int input_width = input_shape.Dims(2);
+  const int filter_height = filter_shape.Dims(1);
+  const int filter_width = filter_shape.Dims(2);
+  const int filter_input_depth = filter_shape.Dims(3);
+  const int groups = input_depth / filter_input_depth;
+  TFLITE_DCHECK_EQ(input_depth % filter_input_depth, 0);
+  const int filters_per_group = output_depth / groups;
+  const int output_height = output_shape.Dims(1);
+  const int output_width = output_shape.Dims(2);
+  for (int batch = 0; batch < batches; ++batch) {
+    for (int out_y = 0; out_y < output_height; ++out_y) {
+      const int in_y_origin = (out_y * stride_height) - pad_height;
+      for (int out_x = 0; out_x < output_width; ++out_x) {
+        const int in_x_origin = (out_x * stride_width) - pad_width;
+        for (int out_channel = 0; out_channel < output_depth; ++out_channel) {
+          auto group = out_channel / filters_per_group;
+          AccumScalar acc = 0;
+          for (int filter_y = 0; filter_y < filter_height; ++filter_y) {
+            const int in_y = in_y_origin + dilation_height_factor * filter_y;
+            for (int filter_x = 0; filter_x < filter_width; ++filter_x) {
+              const int in_x = in_x_origin + dilation_width_factor * filter_x;
+
+              // Zero padding by omitting the areas outside the image.
+              const bool is_point_inside_image =
+                  (in_x >= 0) && (in_x < input_width) && (in_y >= 0) &&
+                  (in_y < input_height);
+
+              if (!is_point_inside_image) {
+                continue;
+              }
+
+              for (int in_channel = 0; in_channel < filter_input_depth;
+                   ++in_channel) {
+                int32_t input_val =
+                    input_data[Offset(input_shape, batch, in_y, in_x,
+                                      in_channel + group * filter_input_depth)];
+                int32_t filter_val = filter_data[Offset(
+                    filter_shape, out_channel, filter_y, filter_x, in_channel)];
+                // Accumulate with 64 bits accumulator.
+                // int64_t += int8_t * int16_t so the highest value we can
+                // get from each accumulation is [-127, 127] * ([-32768,
+                // 32767] -
+                // [-32768, 32767]), which is [-8322945, 8322945].
+                // log2(8322945) = 22.99.
+                acc += filter_val * input_val;
+              }
+            }
+          }
+          if (bias_data) {
+            acc += bias_data[out_channel];
+          }
+          int32_t scaled_acc = MultiplyByQuantizedMultiplier(
+              acc, output_multiplier[out_channel], output_shift[out_channel]);
+          scaled_acc = std::max(scaled_acc, output_activation_min);
+          scaled_acc = std::min(scaled_acc, output_activation_max);
+          output_data[Offset(output_shape, batch, out_y, out_x, out_channel)] =
+              static_cast<int16_t>(scaled_acc);
+        }
+      }
+    }
+  }
+}
+
+}  // namespace reference_integer_ops
+}  // namespace tflite
+
+#endif  // TENSORFLOW_LITE_KERNELS_INTERNAL_REFERENCE_INTEGER_OPS_CONV_H_

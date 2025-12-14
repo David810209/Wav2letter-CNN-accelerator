@@ -219,11 +219,11 @@ inline void ConvPerChannel(
     cfu_op0(/* funct7= */ 3, /* in0= */input_M, /* in1= */ nonzero_kernel_count);
     tmp_start_time = perf_get_mcycle64();
     for(int nz_idx = 0;nz_idx < nonzero_kernel_count;nz_idx+=4){
-      // uint32_t filter =  static_cast<uint8_t>(kernel[out_channel][nz_idx]) << 24 |
-      //                  static_cast<uint8_t>(kernel[out_channel][nz_idx+1]) << 16 |
-      //                  static_cast<uint8_t>(kernel[out_channel][nz_idx+2]) << 8  |
-      //                  static_cast<uint8_t>(kernel[out_channel][nz_idx+3]);
-      uint32_t filter = *((uint32_t *)(kernel + out_channel * 5000 + nz_idx));
+      uint32_t filter =  static_cast<uint8_t>(kernel[out_channel][nz_idx]) << 24 |
+                       static_cast<uint8_t>(kernel[out_channel][nz_idx+1]) << 16 |
+                       static_cast<uint8_t>(kernel[out_channel][nz_idx+2]) << 8  |
+                       static_cast<uint8_t>(kernel[out_channel][nz_idx+3]);
+      // uint32_t filter = *((uint32_t *)(kernel + out_channel * 5000 + nz_idx));
       cfu_op0(/* funct7= */ 1, /* in0= */ filter, /* in1= */ 0);
       // int nz_kernel_idx = kernel_nonzero_idx[out_channel][nz_idx+1];
       // if(nz_kernel_idx != -1){
