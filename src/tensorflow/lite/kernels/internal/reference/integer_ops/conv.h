@@ -34,16 +34,14 @@ inline void ConvPerChannel(
     const int8_t* filter_data, const RuntimeShape& bias_shape,
     const int32_t* bias_data, const RuntimeShape& output_shape,
     int8_t* output_data) {
-    print_conv_params(params, input_shape, filter_shape, output_shape);
-    perf_enable_counter(6);
-    uint64_t start_time = perf_get_mcycle64();
-    uint64_t tmp_start_time = perf_get_mcycle64();
-    const int K_max = 8000; // filter_w * filter_h * input_depth. -
-    const int M_max = 148; // out_w * out_h.
-    const int N_max = 2000; // out_ch
-    int8_t im2col[M_max][K_max];
-    int8_t kernel[N_max][5000];
-    int16_t kernel_nonzero_idx[N_max][5000];
+    // print_conv_params(params, input_shape, filter_shape, output_shape);
+      perf_enable_counter(6);
+      uint64_t total_start_time = perf_get_mcycle64();
+  const int K_max = 8000; // filter_w * filter_h * input_depth. -> max(layer # 2) = 1 * 1 * 300 = 300
+  const int M_max = 148; // out_w * out_h. -> max(layer # 1) = 45 * 18 = 810
+  const int N_max = 2000; // out_ch -> max(layer #1) = 300
+  int8_t im2col[M_max][K_max];
+  int8_t kernel[N_max][K_max];
   // Get parameters.
   const int32_t input_offset = params.input_offset;  // r = s(q - Z)
   const int stride_width = params.stride_width;
@@ -81,58 +79,19 @@ inline void ConvPerChannel(
   // const int filters_per_group = output_depth / groups;
   const int output_height = output_shape.Dims(1);
   const int output_width = output_shape.Dims(2);
-  uint64_t tmp_end_time = perf_get_mcycle64();
-  printf("preprocess took: ");
-  perf_print_value(tmp_end_time - tmp_start_time);
-  printf(" cycles\n");
-  // convert filter
-  tmp_start_time = perf_get_mcycle64();
-  int max_nonzero_count = 0;
-  int total_nonzero_count = 0;
-  int total_amount = 0;
-  for(int out_channel = 0; out_channel < output_depth;++out_channel){
-    int filter_i = 0; // filter_w * filter_h * input_depth
-    int nonzero_count = 0;
-    for (int filter_y = 0; filter_y < filter_height; ++filter_y) {
-      for (int filter_x = 0; filter_x < filter_width; ++filter_x) {
-        for (int in_channel = 0; in_channel < filter_input_depth;
-              ++in_channel) {
-          int8_t filter_val = static_cast<int8_t>(filter_data[Offset(
-            filter_shape, out_channel, filter_y, filter_x, in_channel)]);
-          if (filter_val != 0) {
-            kernel_nonzero_idx[out_channel][nonzero_count+1] = filter_i;
-            kernel[out_channel][nonzero_count] = filter_val;
-            nonzero_count++;
-            total_nonzero_count++;
-          }
-          filter_i++;
-          total_amount++;
-        }
-      }
-    }
-    kernel_nonzero_idx[out_channel][0] = nonzero_count;
-    if(nonzero_count % 4 != 0){
-      int pad_count = 4 - (nonzero_count %4);
-      for(int pad_i = 0; pad_i < pad_count; ++pad_i){
-        kernel_nonzero_idx[out_channel][nonzero_count + pad_i +1] = 0;
-        kernel[out_channel][nonzero_count + pad_i] = 0;
-      }
-      nonzero_count += pad_count;
-      kernel_nonzero_idx[out_channel][0] = nonzero_count;
-    }
-    if (nonzero_count > max_nonzero_count) {
-      max_nonzero_count = nonzero_count;
-    }
-  } 
-  printf("filter convert took: ");
-  tmp_end_time = perf_get_mcycle64();
-  perf_print_value(tmp_end_time - tmp_start_time);
-  printf(" cycles\n");
-  /* Use double arithmetic to avoid float->double promotion warnings
-    (compiler with -Wdouble-promotion treats implicit promotions as errors). */
-  printf("nonzero rate is: %d/%d\n", total_nonzero_count, total_amount);
-  // convert image 
-  tmp_start_time = perf_get_mcycle64();
+  int M = output_height * output_width;
+  int N = output_depth;
+  int K = filter_height * filter_width * filter_input_depth;
+  int cast4_N = (N + 3) /4 *4;
+  int cast4_K = (K + 3) /4 *4;
+  uint64_t filter_load_time = 0;
+  uint64_t image_load_time = 0;
+  uint64_t compute_and_out_time = 0;
+  uint64_t start_time, end_time;
+  uint64_t convert_image_time = 0;
+  uint64_t convert_filter_time = 0;
+  // convert image
+  start_time = perf_get_mcycle64();
   for (int batch = 0; batch < batches; ++batch) {
     int patch_i = 0; // out_w * out_h.
     for (int out_y = 0; out_y < output_height; ++out_y) {
@@ -166,28 +125,55 @@ inline void ConvPerChannel(
       }
     }
   }
-  printf("image convert took: ");
-  tmp_end_time = perf_get_mcycle64();
-  perf_print_value(tmp_end_time - tmp_start_time);
-  printf(" cycles\n");
+  if(K == 1750){
+    for(int i = 0;i < M;i++){
+      for(int j = 1750;j < 1752;j++){
+        im2col[i][j] = 0;
+      }
+    }
+  }
+  end_time = perf_get_mcycle64();
+  convert_image_time += end_time - start_time;
+  // convert filter
+  start_time = perf_get_mcycle64();
+  int filter_j = 0; // output_depth
+  for(int out_channel = 0; out_channel < output_depth;++out_channel){
+    int filter_i = 0; // filter_w * filter_h * input_depth
+    for (int filter_y = 0; filter_y < filter_height; ++filter_y) {
+      for (int filter_x = 0; filter_x < filter_width; ++filter_x) {
 
-  // cal part
-  int M = output_height * output_width;
-  int N = output_depth;
-  int K = filter_height * filter_width * filter_input_depth;
-  printf("in this layer, K is %d, max_nonzero_count is %d\n", K, max_nonzero_count);
-  printf("M is %d, N is %d, K is %d, input_offset is %ld\n", M, N, K, input_offset);
+        for (int in_channel = 0; in_channel < filter_input_depth;
+              ++in_channel) {
+          kernel[filter_j][filter_i++] = static_cast<int8_t>(filter_data[Offset(
+              filter_shape, out_channel, filter_y, filter_x, in_channel)]);
+        }
+      }
+    }
+    filter_j++;
+  } 
+  if(K == 1750){
+      for(int i = 0;i < N;i++){ 
+        for(int j = 1750;j < 1752;j++){ 
+          kernel[i][j] = 0; 
+        }
+     }
+  }
+  end_time = perf_get_mcycle64();
+  convert_filter_time += end_time - start_time;
+
+  printf("convert image took: ");
+  perf_print_value(convert_image_time);
+  printf(" cycles\n");
+  printf("convert filter took: ");
+  perf_print_value(convert_filter_time);
+  printf(" cycles\n");
   // evaluation correctness
   // int8_t reference_output[M_max][N_max];
   // for (int idx = 0; idx < M; ++idx) {
   //   for(int out_channel = 0; out_channel < N;++out_channel){
   //     int32_t acc = 0;
-  //     int nonzero_kernel_count = kernel_nonzero_idx[out_channel][0];
-  //     for(int nz_idx = 0;nz_idx < nonzero_kernel_count;++nz_idx){
-  //       int nz_kernel_idx = kernel_nonzero_idx[out_channel][nz_idx+1];
-  //       if(nz_kernel_idx != -1){
-  //         acc += (im2col[idx][nz_kernel_idx] + input_offset) * kernel[out_channel][nz_idx];
-  //       }
+  //     for(int kdx = 0;kdx < K;++kdx){
+  //       acc += (im2col[kdx][idx] + input_offset) * kernel[kdx][out_channel];
   //     }
   //     if (bias_data) {
   //       acc += bias_data[out_channel];
@@ -203,107 +189,77 @@ inline void ConvPerChannel(
 
   //   }
   // }
-  //----------------
 
-  uint64_t filter_load_time = 0;
-  uint64_t image_load_time = 0;
-  uint64_t compute_and_out_time = 0;
-  int out_of_bound = 0;
-  // int error_count = 0;
-  cfu_op0(/* funct7= */ 4, /* in0= */0 ,/* in1= */ input_offset);
-  int input_M;
-  if(K == 8000) input_M = 52;
-  else input_M = (M+3)/4*4;
-  for(int out_channel = 0; out_channel < N;++out_channel){
-    int nonzero_kernel_count = kernel_nonzero_idx[out_channel][0];
-    cfu_op0(/* funct7= */ 3, /* in0= */input_M, /* in1= */ nonzero_kernel_count);
-    tmp_start_time = perf_get_mcycle64();
-    for(int nz_idx = 0;nz_idx < nonzero_kernel_count;nz_idx+=4){
-      uint32_t filter =  static_cast<uint8_t>(kernel[out_channel][nz_idx]) << 24 |
-                       static_cast<uint8_t>(kernel[out_channel][nz_idx+1]) << 16 |
-                       static_cast<uint8_t>(kernel[out_channel][nz_idx+2]) << 8  |
-                       static_cast<uint8_t>(kernel[out_channel][nz_idx+3]);
-      // uint32_t filter = *((uint32_t *)(kernel + out_channel * 5000 + nz_idx));
-      cfu_op0(/* funct7= */ 1, /* in0= */ filter, /* in1= */ 0);
-      // int nz_kernel_idx = kernel_nonzero_idx[out_channel][nz_idx+1];
-      // if(nz_kernel_idx != -1){
-      //   acc += (im2col[idx][nz_kernel_idx] + input_offset) * kernel[out_channel][nz_idx];
-      // }
-    }
-    tmp_end_time = perf_get_mcycle64();
-    filter_load_time += (tmp_end_time - tmp_start_time);
-    int tmp_M = (M+3)/4*4;
-    int iter_val = 1;
-    if(K == 8000){ 
-      tmp_M = 52;
-      iter_val = 3;
-    }
-    for(int iter = 0,start_idx = 0;iter < iter_val;iter++, start_idx += tmp_M){
-      tmp_start_time = perf_get_mcycle64();
-      if(iter == 2){
-        tmp_M = 44;
-        cfu_op0(/* funct7= */ 3, /* in0= */tmp_M, /* in1= */ nonzero_kernel_count);
+  // cal part
+  int M_tile_factor;
+  // L2-8
+  if(K == 1750)M_tile_factor = 1; 
+  // L9
+  else if(K == 8000)M_tile_factor = 5;
+  //L1,L10,L11
+  else M_tile_factor = 2;
+  printf("in this layer:\n");
+  printf("M = %d, N = %d, K = %d, cast4_N = %d\n", M, N, K, cast4_N);
+  printf("tile M factor = %d\n", M_tile_factor);
+  cfu_op0(/* funct7= */ 4, /* in0= */N, /* in1= */ input_offset);
+  int M_start_idx = 0;
+  int error_count = 0;
+  for(int idx = 0;idx < M_tile_factor;idx++){
+    int M_tile;
+    if(M_tile_factor == 1)M_tile = M;
+    else if(M_tile_factor == 5) M_tile = idx == 4 ? 20 : 32;
+    else M_tile = idx == 0 ? 76 : 72;
+    cfu_op0(/* funct7= */ 3, /* in0= */M_tile, /* in1= */ cast4_K);
+    start_time = perf_get_mcycle64();
+    for(int i = M_start_idx;i < M_start_idx + M_tile;i++){
+      for(int j = 0;j < cast4_K;j+=4){
+        uint32_t img =  static_cast<uint8_t>(im2col[i][j]) << 24 |
+                        static_cast<uint8_t>(im2col[i][j+1]) << 16 |
+                        static_cast<uint8_t>(im2col[i][j+2]) << 8  |
+                        static_cast<uint8_t>(im2col[i][j+3]);
+        cfu_op0(/* funct7= */ 0, /* in0= */ img, /* in1= */ 0);
       }
-      for (int idx = start_idx; idx < start_idx + tmp_M; ++idx) {
-        for(int nz_idx = 0;nz_idx < nonzero_kernel_count;nz_idx+=4){
-          if(idx >= M){
-            cfu_op0(/* funct7= */ 0, /* in0= */ 0, /* in1= */ 0);
-            out_of_bound = 1;
-          }
-          else{
-            int nz_kernel_idx = kernel_nonzero_idx[out_channel][nz_idx+1]; 
-            int nz_kernel_idx2 = kernel_nonzero_idx[out_channel][nz_idx+2]; 
-            int nz_kernel_idx3 = kernel_nonzero_idx[out_channel][nz_idx+3]; 
-            int nz_kernel_idx4 = kernel_nonzero_idx[out_channel][nz_idx+4]; 
-            uint32_t img = static_cast<uint8_t>(im2col[idx][nz_kernel_idx]) << 24 |
-                           static_cast<uint8_t>(im2col[idx][nz_kernel_idx2]) << 16 | 
-                           static_cast<uint8_t>(im2col[idx][nz_kernel_idx3]) << 8 | 
-                           static_cast<uint8_t>(im2col[idx][nz_kernel_idx4]);
-            cfu_op0(/* funct7= */ 0, /* in0= */ img, /* in1= */ 0);
-          }
-        }
+    }
+    end_time = perf_get_mcycle64();
+    image_load_time += end_time - start_time;
+    for(int ndx = 0;ndx < N;ndx++){
+      start_time = perf_get_mcycle64();
+      for(int i = 0;i < cast4_K;i+=4){
+        uint32_t filter =  static_cast<uint8_t>(kernel[ndx][i]) << 24 |
+                        static_cast<uint8_t>(kernel[ndx][i+1]) << 16 |
+                        static_cast<uint8_t>(kernel[ndx][i+2]) << 8  |
+                        static_cast<uint8_t>(kernel[ndx][i+3]);
+        // uint32_t filter =  *((uint32_t *)(kernel + i*(N_max+50) + j));
+        cfu_op0(/* funct7= */ 1, /* in0= */ filter, /* in1= */ 0);
       }
-      tmp_end_time = perf_get_mcycle64();
-      image_load_time += (tmp_end_time - tmp_start_time);
-      tmp_start_time = perf_get_mcycle64();
-      for (int idx = start_idx; idx < start_idx + tmp_M; ++idx) {
+      end_time = perf_get_mcycle64();
+      filter_load_time += end_time - start_time;
+      // get output
+      start_time = perf_get_mcycle64();
+      for(int i = M_start_idx;i < M_start_idx + M_tile;i++){
         int32_t res = cfu_op0(/* funct7= */ 2, /* in0= */ 0, /* in1= */ 0);
-        if(idx >= M) {
-          out_of_bound = 1;
-          continue;
-        }
-        if (bias_data) {
-          res += bias_data[out_channel];
+        if(bias_data){
+          res += bias_data[ndx];
         }
         res = MultiplyByQuantizedMultiplier(
-            res, output_multiplier[out_channel], output_shift[out_channel]);
+            res, output_multiplier[ndx], output_shift[ndx]);
         res += output_offset;
         res = std::max(res, output_activation_min);
         res = std::min(res, output_activation_max);
-        output_data[Offset(output_shape, 0, idx / output_width, idx % output_width, out_channel)] = static_cast<int8_t>(res);
-        // if(reference_output[idx][out_channel] != static_cast<int8_t>(res)){
-        //   if(error_count == 0){
-        //     printf("first wrong at output idx %d, out_channel %d, ref is %d, cal is %d\n", idx, out_channel, reference_output[idx][out_channel], static_cast<int8_t>(res));
-        //   }
-        //   error_count++;
-        //   output_data[Offset(output_shape, 0, idx / output_width, idx % output_width, out_channel)] = reference_output[idx][out_channel];
-        // }
+        output_data[Offset(output_shape, 0, i / output_width, i % output_width, ndx)] = static_cast<int8_t>(res);
       }
-      tmp_end_time = perf_get_mcycle64();
-      compute_and_out_time += (tmp_end_time - tmp_start_time);
+      end_time = perf_get_mcycle64();
+      compute_and_out_time += end_time - start_time;
     }
+    M_start_idx += M_tile;  
   }
-  if(out_of_bound == 1){
-    printf("out of bound happened!\n");
+  
+  if(error_count == 0){
+    printf("no error happened!\n");
+  } else {
+    printf("total error count is %d\n", error_count);
   }
-  else{
-    printf("no out of bound happened!\n");
-  }
-  // if(error_count == 0){
-  //   printf("no error happened!\n");
-  // } else {
-  //   printf("total error count is %d\n", error_count);
-  // }
+  uint64_t total_end_time = perf_get_mcycle64();
   printf("filter load took: ");
   perf_print_value(filter_load_time);
   printf(" cycles\n");
@@ -314,13 +270,10 @@ inline void ConvPerChannel(
   perf_print_value(compute_and_out_time);
   printf(" cycles\n");
   perf_disable_counter(6);
-  uint64_t end_time = perf_get_mcycle64();
   printf("total convolution took: ");
-  perf_print_value(end_time - start_time);
+  perf_print_value(total_end_time - total_start_time);
   printf(" cycles\n\n");
-  // if(M == 148 && N == 29){
-  //   perf_print_all_counters();
-  // }
+  perf_disable_counter(6);
 }
 
 inline void ConvPerChannelWithPackedInt4Weights(

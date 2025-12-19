@@ -32,12 +32,12 @@ reg [12:0]      K;
 reg [7:0]      M;
 reg [7:0]      N;
 reg signed [31:0] input_offset;
-wire [17:0]     K_x_M;
+reg [17:0]     K_x_M;
 // wire [15:0]     M_x_N;
 // wire [15:0]     K_x_N;
-wire [15:0]     A_size;
-wire [15:0]     B_size;
-wire [15:0]     C_size;
+reg [15:0]     A_size;
+reg [15:0]     B_size;
+reg [15:0]     C_size;
 wire            busy;
 wire            A_wr_en;
 wire [15:0]     A_index;
@@ -64,12 +64,20 @@ wire [6:0] func = cmd_payload_function_id[9:3];
 reg [2:0] state, next_state;
 localparam IDLE = 0, INPUT_A = 1,INPUT_B = 2,COMPUTE = 3, OUTPUT_C = 4, DELAY = 5, OFFSET = 6;
 
-assign K_x_M = M * K;
-// assign K_x_N = N * K;
-// assign M_x_N = M * N;
-assign A_size = K_x_M >> 2;
-assign B_size = K >> 2;
-assign C_size = M >> 2;
+always @(posedge clk or posedge reset)begin
+  if(reset) begin
+    K_x_M <= 0;
+    A_size <= 0;
+    B_size <= 0;
+    C_size <= 0;
+  end
+  else begin
+    K_x_M <= M * K;
+    A_size <= K_x_M >> 2;
+    B_size <= K >> 2;
+    C_size <= M >> 2;
+  end
+end
 always @(posedge clk or posedge reset) begin
   if (reset) begin
     M <= 0;
@@ -125,8 +133,8 @@ always @(*) begin
       next_state = IDLE;
     end
   end
-  INPUT_A: next_state = (A_index_reg >= A_size) ? COMPUTE : INPUT_A;
-  INPUT_B: next_state = (B_index_reg >= B_size) ? IDLE : INPUT_B;
+  INPUT_A: next_state = (A_index_reg >= A_size) ? IDLE : INPUT_A;
+  INPUT_B: next_state = (B_index_reg >= B_size) ? COMPUTE : INPUT_B;
   COMPUTE: next_state = (~in_valid && ~busy) ? OUTPUT_C : COMPUTE;
   OUTPUT_C: next_state = (C_index_reg >= C_size) ? DELAY : OUTPUT_C;
   DELAY: next_state = IDLE;
@@ -210,7 +218,7 @@ end
 always @(posedge clk or posedge reset) begin
   if (reset) begin
     in_valid <= 0;
-  end else if(state == INPUT_A && next_state == COMPUTE) begin
+  end else if(state == INPUT_B && next_state == COMPUTE) begin
     in_valid <= 1;
   end else begin
     in_valid <= 0;
