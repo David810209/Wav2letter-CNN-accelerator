@@ -8,38 +8,36 @@ module global_buffer_bram #(parameter ADDR_BITS=8, parameter DATA_BITS=8)(
   output reg [DATA_BITS-1:0] data_out
   );
 
-  parameter DEPTH = 2**ADDR_BITS;
+  localparam SUB_DEPTH = 2**(ADDR_BITS-1);
 
-  reg [DATA_BITS-1:0] gbuff [DEPTH-1:0];
+  // 使用 (* ram_style = "block" *) 強制 Vivado 使用 BRAM 資源
+  (* ram_style = "block" *) reg [DATA_BITS-1:0] gbuff0 [SUB_DEPTH-1:0];
+  (* ram_style = "block" *) reg [DATA_BITS-1:0] gbuff1 [SUB_DEPTH-1:0];
+
+  // 為了確保 BRAM 推論成功，建議將讀取邏輯寫得更單純
+  reg [DATA_BITS-1:0] out0, out1;
+  reg sel_reg;
 
   always @ (negedge clk) begin
     if (ram_en) begin
+      // 寫入邏輯
       if(wr_en) begin
-        gbuff[index] <= data_in;
+        if(index[ADDR_BITS-1]) 
+          gbuff1[index[ADDR_BITS-2:0]] <= data_in;
+        else                   
+          gbuff0[index[ADDR_BITS-2:0]] <= data_in;
       end
-      else begin
-        data_out <= gbuff[index];
-      end
+      
+      // 讀取邏輯：讓 BRAM 內部先輸出，外部再做選擇
+      out0 <= gbuff0[index[ADDR_BITS-2:0]];
+      out1 <= gbuff1[index[ADDR_BITS-2:0]];
+      sel_reg <= index[ADDR_BITS-1];
     end
   end
 
+  // 根據暫存的位址高位選擇輸出
+  always @ (*) begin
+    data_out = sel_reg ? out1 : out0;
+  end
+
 endmodule
-
-/**
-  Example of instantiating a global_buffer_bram: 
-
-  global_buffer_bram #(
-    .ADDR_BITS(12), // ADDR_BITS 12 -> generates 2^12 entries
-    .DATA_BITS(32)  // DATA_BITS 32 -> 32 bits for each entries
-  )
-  gbuff_A(
-    .clk(clk),
-    .rst_n(1'b1),
-    .ram_en(1'b1),
-    .wr_en(A_wr_en),
-    .index(A_index),
-    .data_in(A_data_in),
-    .data_out(A_data_out)
-  );
-
-*/

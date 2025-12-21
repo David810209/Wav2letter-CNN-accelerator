@@ -42,16 +42,16 @@ wire            busy;
 wire            A_wr_en;
 wire [15:0]     A_index;
 reg [15:0]      A_index_reg;
-wire [31:0]     A_data_in;
-wire [31:0]     A_data_out;
+wire [63:0]     A_data_in;
+wire [63:0]     A_data_out;
 wire [15:0]     A_index_TPU;
 
 wire            B_wr_en;
 wire [15:0]     B_index;
 reg [15:0]      B_index_reg;
 wire [15:0]     B_index_TPU;
-wire [31:0]     B_data_in;
-wire [31:0]     B_data_out;
+wire [63:0]     B_data_in;
+wire [63:0]     B_data_out;
 wire            C_wr_en;
 wire [15:0]     C_index;
 wire [15:0]     C_index_TPU;
@@ -73,8 +73,8 @@ always @(posedge clk or posedge reset)begin
   end
   else begin
     K_x_M <= M * K;
-    A_size <= K_x_M >> 2;
-    B_size <= K >> 2;
+    A_size <= K_x_M >> 3;
+    B_size <= K >> 3;
     C_size <= M >> 2;
   end
 end
@@ -160,7 +160,7 @@ always @(posedge clk or posedge reset) begin
   end
 end
 assign A_wr_en = A_index_reg < A_size && cmd_valid && func == 0;
-assign A_data_in = cmd_payload_inputs_0;
+assign A_data_in = {cmd_payload_inputs_0, cmd_payload_inputs_1};
 always @(posedge clk or posedge reset) begin
   if (reset) begin
     B_index_reg <= 0;
@@ -175,7 +175,7 @@ always @(posedge clk or posedge reset) begin
   end
 end
 assign B_wr_en = B_index_reg < B_size && cmd_valid && func== 1;
-assign B_data_in = cmd_payload_inputs_0;
+assign B_data_in = {cmd_payload_inputs_0, cmd_payload_inputs_1};
 
 reg [1:0] out_cnt;
 always @(posedge clk or posedge reset) begin
@@ -230,8 +230,8 @@ assign B_index = B_wr_en ? B_index_reg : B_index_TPU;
 assign C_index = C_wr_en ? C_index_TPU : C_index_reg;
 
 global_buffer_bram #(
-    .ADDR_BITS(16),
-    .DATA_BITS(32)
+    .ADDR_BITS(15),
+    .DATA_BITS(64)
 )
 gbuff_A(
     .clk(clk),
@@ -244,8 +244,8 @@ gbuff_A(
 );
 
 global_buffer_bram #(
-    .ADDR_BITS(11),
-    .DATA_BITS(32)
+    .ADDR_BITS(10),
+    .DATA_BITS(64)
 ) gbuff_B(
     .clk(clk),
     .rst_n(~reset),

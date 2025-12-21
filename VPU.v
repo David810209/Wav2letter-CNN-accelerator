@@ -37,13 +37,13 @@ output           busy;
 
 output           A_wr_en;
 output reg [15:0]    A_index;
-output [31:0]    A_data_in;
-input  [31:0]    A_data_out;
+output [63:0]    A_data_in;
+input  [63:0]    A_data_out;
 
 output           B_wr_en;
 output reg [15:0]    B_index;
-output [31:0]    B_data_in;
-input  [31:0]    B_data_out;
+output [63:0]    B_data_in;
+input  [63:0]    B_data_out;
 
 output reg      C_wr_en;
 output reg [15:0]    C_index;
@@ -78,9 +78,9 @@ always @(posedge clk or negedge rst_n) begin
         A_sz <= 0;
     end
     else if(state == IDLE && in_valid) begin
-        K_reg <= (K >> 2);
+        K_reg <= (K >> 3);
         M_reg_div_4 <= (M) >> 2;
-        A_sz <= (M_x_K) >> 2;
+        A_sz <= (M_x_K) >> 3;
     end
     else begin
         K_reg <= K_reg;
@@ -140,7 +140,7 @@ always @(posedge clk or negedge rst_n) begin
     end
 end
 
-reg [31:0] A_reg, B_reg;
+reg [63:0] A_reg, B_reg;
 always @(posedge clk or negedge rst_n) begin
     if(!rst_n) begin
         A_reg <= 0;
@@ -154,7 +154,7 @@ end
 
 // stage 2 compute
 reg signed [31:0] output_buffer;
-wire signed [15:0] prod_0, prod_1, prod_2, prod_3;
+wire signed [15:0] prod_0, prod_1, prod_2, prod_3, prod_4, prod_5, prod_6, prod_7;
 assign prod_0 =  ($signed(A_reg[7 : 0]) + input_offset)
                 * $signed(B_reg[7 : 0]);
 assign prod_1 =  ($signed(A_reg[15: 8]) + input_offset)
@@ -163,8 +163,16 @@ assign prod_2 =  ($signed(A_reg[23:16]) + input_offset)
                 * $signed(B_reg[23:16]);
 assign prod_3 =  ($signed(A_reg[31:24]) + input_offset)
                 * $signed(B_reg[31:24]);
+assign prod_4 =  ($signed(A_reg[39:32]) + input_offset)
+                * $signed(B_reg[39:32]);
+assign prod_5 =  ($signed(A_reg[47:40]) + input_offset)
+                * $signed(B_reg[47:40]);
+assign prod_6 =  ($signed(A_reg[55:48]) + input_offset)
+                * $signed(B_reg[55:48]);
+assign prod_7 =  ($signed(A_reg[63:56]) + input_offset)
+                * $signed(B_reg[63:56]);
 wire signed [31:0] sum_prods;
-assign sum_prods = prod_0 + prod_1 + prod_2 + prod_3;
+assign sum_prods = prod_0 + prod_1 + prod_2 + prod_3 + prod_4 + prod_5 + prod_6 + prod_7;
 reg done_reg;
 always @(posedge clk or negedge rst_n) begin
     if(!rst_n) begin
