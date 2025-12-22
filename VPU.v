@@ -37,13 +37,13 @@ output           busy;
 
 output           A_wr_en;
 output reg [15:0]    A_index;
-output [63:0]    A_data_in;
-input  [63:0]    A_data_out;
+output [127:0]    A_data_in;
+input  [127:0]    A_data_out;
 
 output           B_wr_en;
 output reg [15:0]    B_index;
-output [63:0]    B_data_in;
-input  [63:0]    B_data_out;
+output [127:0]    B_data_in;
+input  [127:0]    B_data_out;
 
 output reg      C_wr_en;
 output reg [15:0]    C_index;
@@ -78,9 +78,9 @@ always @(posedge clk or negedge rst_n) begin
         A_sz <= 0;
     end
     else if(state == IDLE && in_valid) begin
-        K_reg <= (K >> 3);
+        K_reg <= (K >> 4);
         M_reg_div_4 <= (M) >> 2;
-        A_sz <= (M_x_K) >> 3;
+        A_sz <= (M_x_K) >> 4;
     end
     else begin
         K_reg <= K_reg;
@@ -140,7 +140,7 @@ always @(posedge clk or negedge rst_n) begin
     end
 end
 
-reg [63:0] A_reg, B_reg;
+reg [127:0] A_reg, B_reg;
 always @(posedge clk or negedge rst_n) begin
     if(!rst_n) begin
         A_reg <= 0;
@@ -154,7 +154,7 @@ end
 
 // stage 2 compute
 reg signed [31:0] output_buffer;
-wire signed [15:0] prod_0, prod_1, prod_2, prod_3, prod_4, prod_5, prod_6, prod_7;
+wire signed [15:0] prod_0, prod_1, prod_2, prod_3, prod_4, prod_5, prod_6, prod_7, prod_8, prod_9, prod_10, prod_11, prod_12, prod_13, prod_14, prod_15;
 assign prod_0 =  ($signed(A_reg[7 : 0]) + input_offset)
                 * $signed(B_reg[7 : 0]);
 assign prod_1 =  ($signed(A_reg[15: 8]) + input_offset)
@@ -171,8 +171,25 @@ assign prod_6 =  ($signed(A_reg[55:48]) + input_offset)
                 * $signed(B_reg[55:48]);
 assign prod_7 =  ($signed(A_reg[63:56]) + input_offset)
                 * $signed(B_reg[63:56]);
+assign prod_8 =  ($signed(A_reg[71:64]) + input_offset)
+                * $signed(B_reg[71:64]);
+assign prod_9 =  ($signed(A_reg[79:72]) + input_offset)
+                * $signed(B_reg[79:72]);
+assign prod_10 =  ($signed(A_reg[87:80]) + input_offset)
+                * $signed(B_reg[87:80]);
+assign prod_11 =  ($signed(A_reg[95:88]) + input_offset)
+                * $signed(B_reg[95:88]);
+assign prod_12 =  ($signed(A_reg[103:96]) + input_offset)
+                * $signed(B_reg[103:96]);   
+assign prod_13 =  ($signed(A_reg[111:104]) + input_offset)
+                * $signed(B_reg[111:104]);
+assign prod_14 =  ($signed(A_reg[119:112]) + input_offset)
+                * $signed(B_reg[119:112]);
+assign prod_15 =  ($signed(A_reg[127:120]) + input_offset)
+                * $signed(B_reg[127:120]);
 wire signed [31:0] sum_prods;
-assign sum_prods = prod_0 + prod_1 + prod_2 + prod_3 + prod_4 + prod_5 + prod_6 + prod_7;
+assign sum_prods = prod_0 + prod_1 + prod_2 + prod_3 + prod_4 + prod_5 + prod_6 + prod_7 +
+                   prod_8 + prod_9 + prod_10 + prod_11 + prod_12 + prod_13 + prod_14 + prod_15;
 reg done_reg;
 always @(posedge clk or negedge rst_n) begin
     if(!rst_n) begin
