@@ -99,7 +99,7 @@ module tb_cfu;
   endtask
 
   // ===== 測試案例參數 =====
-  integer num_cases = 13;
+  integer num_cases = 7;
   reg [8*10:1] case_names [0:12]; // 用來顯示 L1, L2...
   integer M_vals [0:12];
   integer K_vals [0:12];
@@ -108,19 +108,13 @@ module tb_cfu;
 
   initial begin
     // 依照順序對應 1.txt ~ 13.txt
-    case_names[0] = "L1";   M_vals[0]=148; K_vals[0]=1340; Input_offset_vals[0]=3;   N_vals[0]=2;  // 1.txt
-    case_names[1] = "L2";   M_vals[1]=148; K_vals[1]=1052; Input_offset_vals[1]=75;  N_vals[1]=2;  // 2.txt
-    case_names[2] = "L3";   M_vals[2]=148; K_vals[2]=1236; Input_offset_vals[2]=72;  N_vals[2]=2;  // 3.txt
-    case_names[3] = "L4";   M_vals[3]=148; K_vals[3]=1064; Input_offset_vals[3]=33;  N_vals[3]=2;  // 4.txt
-    case_names[4] = "L5";   M_vals[4]=148; K_vals[4]=1108; Input_offset_vals[4]=80;  N_vals[4]=2;  // 5.txt
-    case_names[5] = "L6";   M_vals[5]=148; K_vals[5]=1064; Input_offset_vals[5]=72;  N_vals[5]=2;  // 6.txt
-    case_names[6] = "L7";   M_vals[6]=148; K_vals[6]=1276; Input_offset_vals[6]=68;  N_vals[6]=2;  // 7.txt
-    case_names[7] = "L8";   M_vals[7]=148; K_vals[7]=1020; Input_offset_vals[7]=56;  N_vals[7]=2;  // 8.txt
-    case_names[8] = "L9-1"; M_vals[8]=52;  K_vals[8]=4912; Input_offset_vals[8]=90;  N_vals[8]=2; // 9.txt
-    case_names[9] = "L9-2"; M_vals[9]=52;  K_vals[9]=4912; Input_offset_vals[9]=90;  N_vals[9]=2; // 10.txt
-    case_names[10]="L9-3";  M_vals[10]=44; K_vals[10]=4912; Input_offset_vals[10]=90; N_vals[10]=2;// 11.txt
-    case_names[11]="L10";   M_vals[11]=148; K_vals[11]=1364; Input_offset_vals[11]=84; N_vals[11]=2;// 12.txt
-    case_names[12]="L11";   M_vals[12]=148; K_vals[12]=1220; Input_offset_vals[12]=66; N_vals[12]=2;// 13.txt
+    case_names[0] = "L1";   M_vals[0]=76;  K_vals[0]=1888; Input_offset_vals[0]=3;   N_vals[0]=1;  // 1.txt
+    case_names[1] = "L2";   M_vals[1]=72;  K_vals[1]=1888; Input_offset_vals[1]=3;   N_vals[1]=1;  // 2.txt
+    case_names[2] = "L3";   M_vals[2]=148; K_vals[2]=1760; Input_offset_vals[2]=75;  N_vals[2]=1;  // 3.txt
+    case_names[3] = "L4";   M_vals[3]=32;  K_vals[3]=8000; Input_offset_vals[3]=90;  N_vals[3]=1;  // 4.txt
+    case_names[4] = "L5";   M_vals[4]=20;  K_vals[4]=8000; Input_offset_vals[4]=90;  N_vals[4]=1;  // 5.txt
+    case_names[5] = "L6";   M_vals[5]=76;  K_vals[5]=2016; Input_offset_vals[5]=90;  N_vals[5]=1;  // 6.txt
+    case_names[6] = "L7";   M_vals[6]=72;  K_vals[6]=2016; Input_offset_vals[6]=90;  N_vals[6]=1;  // 7.txt
 
   end
 
@@ -187,16 +181,16 @@ module tb_cfu;
           // 5. 設定參數 (funct7=3: Set Params, funct7=4: Reset Offset)
           send_cmd(m_curr, k_curr, 3); 
           send_cmd(0, Input_offset_vals[case_idx], 4);
-
+// 7. 傳送 Activations (A)
+          for (i = 0; i < num_in_a; i = i + 2) begin
+              send_cmd(A_mem[i], A_mem[i+1], 0);
+          end
           // 6. 傳送 Weights (B)
-          for (i = 0; i < num_in_b; i = i + 1) begin
-              send_cmd(B_mem[i], 0, 1);
+          for (i = 0; i < num_in_b; i = i + 2) begin
+              send_cmd(B_mem[i], B_mem[i+1], 1);
           end
 
-          // 7. 傳送 Activations (A)
-          for (i = 0; i < num_in_a; i = i + 1) begin
-              send_cmd(A_mem[i], 0, 0);
-          end
+          // 7. 傳送 Weights (B)
 
           // 8. 讀回結果 (funct7=2)
           @(posedge clk);

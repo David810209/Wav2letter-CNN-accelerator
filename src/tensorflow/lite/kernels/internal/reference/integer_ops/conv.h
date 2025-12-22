@@ -38,7 +38,7 @@ inline void ConvPerChannel(
     int8_t* output_data) {
     // print_conv_params(params, input_shape, filter_shape, output_shape);
       perf_enable_counter(6);
-      uint64_t total_start_time = perf_get_mcycle64();
+      // uint64_t total_start_time = perf_get_mcycle64();
   const int K_max = 8000; // filter_w * filter_h * input_depth. -> max(layer # 2) = 1 * 1 * 300 = 300
   const int M_max = 148; // out_w * out_h. -> max(layer # 1) = 45 * 18 = 810
   // const int N_max = 2000; // out_ch -> max(layer #1) = 300
@@ -97,14 +97,14 @@ inline void ConvPerChannel(
   int N = output_depth;
   int K = filter_height * filter_width * filter_input_depth;
   int cast32_K = (K + 31) /32 *32;
-  uint64_t filter_load_time = 0;
-  uint64_t image_load_time = 0;
-  uint64_t compute_and_out_time = 0;
-  uint64_t start_time, end_time;
-  uint64_t convert_image_time = 0;
-  uint64_t convert_filter_time = 0;
+  // uint64_t filter_load_time = 0;
+  // uint64_t image_load_time = 0;
+  // uint64_t compute_and_out_time = 0;
+  // uint64_t start_time, end_time;
+  // uint64_t convert_image_time = 0;
+  // uint64_t convert_filter_time = 0;
   // convert image
-  start_time = perf_get_mcycle64();
+  // start_time = perf_get_mcycle64();
   const int input_width_stride = input_width * input_depth;
   int8_t pad_val = static_cast<int8_t>(-input_offset);
 
@@ -163,8 +163,8 @@ inline void ConvPerChannel(
       }
     }
   }
-  end_time = perf_get_mcycle64();
-  convert_image_time += end_time - start_time;
+  // end_time = perf_get_mcycle64();
+  // convert_image_time += end_time - start_time;
   // convert filter
   // start_time = perf_get_mcycle64();
   // int filter_j = 0; // output_depth
@@ -192,12 +192,12 @@ inline void ConvPerChannel(
   // end_time = perf_get_mcycle64();
   // convert_filter_time += end_time - start_time;
 
-  printf("convert image took: ");
-  perf_print_value(convert_image_time);
-  printf(" cycles\n");
-  printf("convert filter took: ");
-  perf_print_value(convert_filter_time);
-  printf(" cycles\n");
+  // printf("convert image took: ");
+  // perf_print_value(convert_image_time);
+  // printf(" cycles\n");
+  // printf("convert filter took: ");
+  // perf_print_value(convert_filter_time);
+  // printf(" cycles\n");
   // evaluation correctness
   // int8_t reference_output[M_max][N_max];
   // for (int idx = 0; idx < M; ++idx) {
@@ -229,19 +229,19 @@ inline void ConvPerChannel(
   else if(K == 8000)M_tile_factor = 5;
   //L1,L10,L11
   else M_tile_factor = 2;
-  printf("in this layer:\n");
-  printf("M = %d, N = %d, K = %d\n", M, N, K);
-  printf("tile M factor = %d\n", M_tile_factor);
+  // printf("in this layer:\n");
+  // printf("M = %d, N = %d, K = %d\n", M, N, K);
+  // printf("tile M factor = %d\n", M_tile_factor);
   cfu_op0(/* funct7= */ 4, /* in0= */N, /* in1= */ input_offset);
   int M_start_idx = 0;
-  int error_count = 0;
+  // int error_count = 0;
   for(int idx = 0;idx < M_tile_factor;idx++){
     int M_tile;
     if(M_tile_factor == 1)M_tile = M;
     else if(M_tile_factor == 5) M_tile = idx == 4 ? 20 : 32;
     else M_tile = idx == 0 ? 76 : 72;
     cfu_op0(/* funct7= */ 3, /* in0= */M_tile, /* in1= */ cast32_K);
-    start_time = perf_get_mcycle64();
+    // start_time = perf_get_mcycle64();
     for(int i = M_start_idx;i < M_start_idx + M_tile;i++){
       for(int j = 0;j < cast32_K;j+=32){
         uint32_t img =  *reinterpret_cast<uint32_t*>(&im2col[i][j]);
@@ -258,10 +258,10 @@ inline void ConvPerChannel(
         cfu_op0(/* funct7= */ 0, /* in0= */ img, /* in1= */ img2);
       }
     }
-    end_time = perf_get_mcycle64();
-    image_load_time += end_time - start_time;
+    // end_time = perf_get_mcycle64();
+    // image_load_time += end_time - start_time;
     for(int ndx = 0;ndx < N;ndx++){
-      start_time = perf_get_mcycle64();
+      // start_time = perf_get_mcycle64();
       const int8_t* channel_ptr = kernel + (ndx * cast32_K);
       for(int i = 0;i < cast32_K;i+=32){
         uint32_t filter = *reinterpret_cast<const uint32_t*>(&channel_ptr[i]);
@@ -277,10 +277,10 @@ inline void ConvPerChannel(
         filter2 = *reinterpret_cast<const uint32_t*>(&channel_ptr[i+28]);
         cfu_op0(/* funct7= */ 1, /* in0= */ filter, /* in1= */ filter2);
       }
-      end_time = perf_get_mcycle64();
-      filter_load_time += end_time - start_time;
+      // end_time = perf_get_mcycle64();
+      // filter_load_time += end_time - start_time;
       // get output
-      start_time = perf_get_mcycle64();
+      // start_time = perf_get_mcycle64();
       int8_t* target_ptr = output_data + (M_start_idx * N) + ndx;
       for(int i = M_start_idx;i < M_start_idx + M_tile;i++){
         int32_t res = cfu_op0(/* funct7= */ 2, /* in0= */ 0, /* in1= */ 0);
@@ -297,31 +297,31 @@ inline void ConvPerChannel(
         target_ptr += N;
         // return ((i0 * dims_data[1] + i1) * dims_data[2] + i2) * dims_data[3] + i3;
       }
-      end_time = perf_get_mcycle64();
-      compute_and_out_time += end_time - start_time;
+      // end_time = perf_get_mcycle64();
+      // compute_and_out_time += end_time - start_time;
     }
     M_start_idx += M_tile;  
   }
   
-  if(error_count == 0){
-    printf("no error happened!\n");
-  } else {
-    printf("total error count is %d\n", error_count);
-  }
-  uint64_t total_end_time = perf_get_mcycle64();
-  printf("filter load took: ");
-  perf_print_value(filter_load_time);
-  printf(" cycles\n");
-  printf("image load took: ");
-  perf_print_value(image_load_time);
-  printf(" cycles\n");
-  printf("compute and output took: ");
-  perf_print_value(compute_and_out_time);
-  printf(" cycles\n");
-  perf_disable_counter(6);
-  printf("total convolution took: ");
-  perf_print_value(total_end_time - total_start_time);
-  printf(" cycles\n\n");
+  // if(error_count == 0){
+  //   printf("no error happened!\n");
+  // } else {
+  //   printf("total error count is %d\n", error_count);
+  // }
+  // uint64_t total_end_time = perf_get_mcycle64();
+  // printf("filter load took: ");
+  // perf_print_value(filter_load_time);
+  // printf(" cycles\n");
+  // printf("image load took: ");
+  // perf_print_value(image_load_time);
+  // printf(" cycles\n");
+  // printf("compute and output took: ");
+  // perf_print_value(compute_and_out_time);
+  // printf(" cycles\n");
+  // perf_disable_counter(6);
+  // printf("total convolution took: ");
+  // perf_print_value(total_end_time - total_start_time);
+  // printf(" cycles\n\n");
   perf_disable_counter(6);
 }
 
