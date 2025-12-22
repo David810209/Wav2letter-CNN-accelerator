@@ -1,0 +1,138 @@
+Running inference...
+..convert image took:   2375k (      2374859 )  cycles
+convert filter took:   8879k (      8878901 )  cycles
+in this layer:
+M = 148, N = 250, K = 1872, cast4_N = 252
+tile M factor = 2
+no error happened!
+filter load took:   2859k (      2859115 )  cycles
+image load took:   1601k (      1601390 )  cycles
+compute and output took:     41M (     41251709 )  cycles
+total convolution took:     60M (     60377019 )  cycles
+
+..convert image took:   1814k (      1814158 )  cycles
+convert filter took:   8216k (      8215621 )  cycles
+in this layer:
+M = 148, N = 250, K = 1750, cast4_N = 252
+tile M factor = 1
+no error happened!
+filter load took:   1393k (      1393005 )  cycles
+image load took:   1495k (      1495027 )  cycles
+compute and output took:     39M (     38739268 )  cycles
+total convolution took:     53M (     53375986 )  cycles
+
+..convert image took:   1809k (      1809050 )  cycles
+convert filter took:   8227k (      8226898 )  cycles
+in this layer:
+M = 148, N = 250, K = 1750, cast4_N = 252
+tile M factor = 1
+no error happened!
+filter load took:   1393k (      1392913 )  cycles
+image load took:   1495k (      1495259 )  cycles
+compute and output took:     41M (     40837746 )  cycles
+total convolution took:     55M (     55480971 )  cycles
+
+..convert image took:   1809k (      1809390 )  cycles
+convert filter took:   8222k (      8221664 )  cycles
+in this layer:
+M = 148, N = 250, K = 1750, cast4_N = 252
+tile M factor = 1
+no error happened!
+filter load took:   1393k (      1392938 )  cycles
+image load took:   1495k (      1495298 )  cycles
+compute and output took:     39M (     38673449 )  cycles
+total convolution took:     53M (     53312191 )  cycles
+
+..convert image took:   1810k (      1810071 )  cycles
+convert filter took:   8224k (      8224215 )  cycles
+in this layer:
+M = 148, N = 250, K = 1750, cast4_N = 252
+tile M factor = 1
+no error happened!
+filter load took:   1392k (      1392305 )  cycles
+image load took:   1495k (      1495195 )  cycles
+compute and output took:     39M (     39176982 )  cycles
+total convolution took:     54M (     53815813 )  cycles
+
+..convert image took:   1806k (      1805997 )  cycles
+convert filter took:   8223k (      8223446 )  cycles
+in this layer:
+M = 148, N = 250, K = 1750, cast4_N = 252
+tile M factor = 1
+no error happened!
+filter load took:   1392k (      1392358 )  cycles
+image load took:   1495k (      1495397 )  cycles
+compute and output took:     39M (     38863933 )  cycles
+total convolution took:     53M (     53499842 )  cycles
+
+..convert image took:   1810k (      1810282 )  cycles
+convert filter took:   8224k (      8224435 )  cycles
+in this layer:
+M = 148, N = 250, K = 1750, cast4_N = 252
+tile M factor = 1
+no error happened!
+filter load took:   1394k (      1393644 )  cycles
+image load took:   1495k (      1495156 )  cycles
+compute and output took:     39M (     38671216 )  cycles
+total convolution took:     53M (     53313184 )  cycles
+
+..convert image took:   1807k (      1807262 )  cycles
+convert filter took:   8232k (      8232098 )  cycles
+in this layer:
+M = 148, N = 250, K = 1750, cast4_N = 252
+tile M factor = 1
+no error happened!
+filter load took:   1392k (      1392438 )  cycles
+image load took:   1495k (      1495248 )  cycles
+compute and output took:     39M (     39238393 )  cycles
+total convolution took:     54M (     53884221 )  cycles
+
+..convert image took:   8058k (      8058165 )  cycles
+convert filter took:    299M (    299404977 )  cycles
+in this layer:
+M = 148, N = 2000, K = 8000, cast4_N = 2000
+tile M factor = 5
+no error happened!
+filter load took:    233M (    232792719 )  cycles
+image load took:   6762k (      6762411 )  cycles
+compute and output took:   1240M (   1240002405 )  cycles
+total convolution took:   2055M (   2055201256 )  cycles
+
+..convert image took:   1518k (      1517624 )  cycles
+convert filter took:     75M (     74878674 )  cycles
+in this layer:
+M = 148, N = 2000, K = 2000, cast4_N = 2000
+tile M factor = 2
+no error happened!
+filter load took:     24M (     24411028 )  cycles
+image load took:   1706k (      1705672 )  cycles
+compute and output took:    349M (    349437854 )  cycles
+total convolution took:    481M (    480649802 )  cycles
+
+..convert image took:   1518k (      1518211 )  cycles
+convert filter took:   1086k (      1086131 )  cycles
+in this layer:
+M = 148, N = 29, K = 2000, cast4_N = 32
+tile M factor = 2
+no error happened!
+filter load took:    350k (       349720 )  cycles
+image load took:   1705k (      1705326 )  cycles
+compute and output took:   4977k (      4976973 )  cycles
+total convolution took:     10M (     10097473 )  cycles
+
+  3044M (   3043963717 )  cycles total
+Inference complete, comparing output...
+
+OK   Golden tests passed!
+
+| 項目                 |            總和 |
+| ------------------ | ------------: |
+| convert image      |    26,135,069 |
+| convert filter     |   441,817,060 |
+| filter load        |   270,162,183 |
+| image load         |    22,241,379 |
+| compute and output | 1,909,869,928 |
+| total convolution  | 2,983,007,758 |
+
+| leaky relu         |   60,000,000 |
+| total              | 3,044 M      |

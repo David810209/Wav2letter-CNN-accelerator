@@ -1,15 +1,15 @@
 [*]
 [*] GTKWave Analyzer v3.3.104 (w)1999-2020 BSI
-[*] Sat Dec 13 19:19:00 2025
+[*] Sun Dec 21 11:35:37 2025
 [*]
 [dumpfile] "/home/zichen/zichen/AAML/CFU-Playground/proj/AAML-2025-Project/cfu_tb.vcd"
-[dumpfile_mtime] "Sat Dec 13 19:16:34 2025"
-[dumpfile_size] 48246345
+[dumpfile_mtime] "Sun Dec 21 11:32:44 2025"
+[dumpfile_size] 117715497
 [savefile] "/home/zichen/zichen/AAML/CFU-Playground/proj/AAML-2025-Project/test.gtkw"
-[timestart] 1011893480
+[timestart] 362802000
 [size] 2474 1536
-[pos] -51 -51
-*-13.977043 1011965000 -1 -1 -1 -1 -1 -1 -1 -1 -1 -1 -1 -1 -1 -1 -1 -1 -1 -1 -1 -1 -1 -1 -1 -1 -1 -1
+[pos] 1955 -390
+*-15.540528 362965000 -1 -1 -1 -1 -1 -1 -1 -1 -1 -1 -1 -1 -1 -1 -1 -1 -1 -1 -1 -1 -1 -1 -1 -1 -1 -1
 [treeopen] tb_cfu.
 [treeopen] tb_cfu.dut.
 [sst_width] 331
@@ -18,19 +18,15 @@
 [sst_vpaned_height] 470
 @28
 tb_cfu.dut.My_VPU.busy
-@22
-tb_cfu.dut.My_VPU.A_data_out[31:0]
 @24
 tb_cfu.dut.My_VPU.A_index[15:0]
 tb_cfu.dut.My_VPU.C_index[15:0]
 tb_cfu.dut.My_VPU.B_index[15:0]
-@22
-tb_cfu.dut.My_VPU.B_data_out[31:0]
 @28
 tb_cfu.dut.My_VPU.one_row_comp_done
 tb_cfu.dut.My_VPU.one_row_comp_done_reg
 tb_cfu.dut.My_VPU.one_row_comp_done_reg_delay
-@23
+@22
 tb_cfu.dut.My_VPU.output_buffer[31:0]
 @c00420
 tb_cfu.dut.My_VPU.C_data_in[127:0]
@@ -163,7 +159,7 @@ tb_cfu.dut.My_VPU.C_data_in[127:0]
 (125)tb_cfu.dut.My_VPU.C_data_in[127:0]
 (126)tb_cfu.dut.My_VPU.C_data_in[127:0]
 (127)tb_cfu.dut.My_VPU.C_data_in[127:0]
-@1401600
+@1401200
 -group_end
 @28
 tb_cfu.dut.My_VPU.C_wr_en
@@ -197,5 +193,25 @@ tb_cfu.dut.My_VPU.input_offset[31:0]
 @22
 tb_cfu.dut.My_VPU.A_reg[31:0]
 tb_cfu.dut.My_VPU.B_reg[31:0]
+@28
+tb_cfu.dut.A_wr_en
+@22
+tb_cfu.dut.A_data_in[63:0]
+@28
+tb_cfu.dut.state[2:0]
+tb_cfu.dut.B_wr_en
+@24
+tb_cfu.dut.A_index[15:0]
+tb_cfu.dut.B_index[15:0]
+@22
+tb_cfu.dut.My_VPU.prod_0[15:0]
+tb_cfu.dut.My_VPU.prod_1[15:0]
+tb_cfu.dut.My_VPU.prod_2[15:0]
+tb_cfu.dut.My_VPU.prod_3[15:0]
+tb_cfu.dut.My_VPU.prod_4[15:0]
+tb_cfu.dut.My_VPU.prod_5[15:0]
+tb_cfu.dut.My_VPU.prod_6[15:0]
+@23
+tb_cfu.dut.My_VPU.prod_7[15:0]
 [pattern_trace] 1
 [pattern_trace] 0

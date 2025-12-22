@@ -1,0 +1,1 @@
+rm -r cfu.v global_buffer_bram.v VPU.v tb output *.vcd

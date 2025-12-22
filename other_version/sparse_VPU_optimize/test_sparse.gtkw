@@ -1,0 +1,68 @@
+[*]
+[*] GTKWave Analyzer v3.3.104 (w)1999-2020 BSI
+[*] Sun Dec 21 08:17:47 2025
+[*]
+[dumpfile] "/home/zichen/zichen/AAML/CFU-Playground/proj/AAML-2025-Project/cfu_tb.vcd"
+[dumpfile_mtime] "Sun Dec 21 08:08:01 2025"
+[dumpfile_size] 224172
+[savefile] "/home/zichen/zichen/AAML/CFU-Playground/proj/AAML-2025-Project/test_sparse.gtkw"
+[timestart] 4988900
+[size] 2474 1536
+[pos] 1955 -390
+*-15.755825 5205000 -1 -1 -1 -1 -1 -1 -1 -1 -1 -1 -1 -1 -1 -1 -1 -1 -1 -1 -1 -1 -1 -1 -1 -1 -1 -1
+[treeopen] tb_cfu.
+[treeopen] tb_cfu.dut.
+[treeopen] tb_cfu.dut.My_VPU.
+[sst_width] 331
+[signals_width] 320
+[sst_expanded] 1
+[sst_vpaned_height] 470
+@28
+tb_cfu.dut.A_wr_en
+@22
+tb_cfu.dut.A_index_reg[15:0]
+@23
+tb_cfu.dut.A_index[15:0]
+@24
+tb_cfu.dut.My_VPU.M_base_index[15:0]
+@22
+tb_cfu.dut.A_data_in[31:0]
+@28
+tb_cfu.dut.state[2:0]
+tb_cfu.dut.B_wr_en
+@24
+tb_cfu.dut.B_index[15:0]
+@28
+tb_cfu.dut.C_wr_en
+@22
+tb_cfu.dut.C_index[15:0]
+@28
+tb_cfu.dut.D_wr_en
+@24
+tb_cfu.dut.D_index[15:0]
+@22
+tb_cfu.dut.D_data_in[63:0]
+@28
+tb_cfu.dut.clk
+tb_cfu.dut.busy
+@22
+tb_cfu.dut.func[6:0]
+@24
+tb_cfu.dut.My_VPU.D_index[15:0]
+@28
+tb_cfu.dut.My_VPU.state
+@24
+tb_cfu.dut.My_VPU.input_cnt[1:0]
+@28
+tb_cfu.dut.My_VPU.one_row_comp_done
+tb_cfu.dut.My_VPU.one_row_comp_done_reg
+tb_cfu.dut.My_VPU.one_row_comp_done_reg_delay
+@22
+tb_cfu.dut.My_VPU.index_sel[15:0]
+tb_cfu.dut.My_VPU.D_reg[63:0]
+@28
+tb_cfu.dut.My_VPU.C_wr_en
+@22
+tb_cfu.dut.My_VPU.C_data_in[127:0]
+[pattern_trace] 1
+[pattern_trace] 0
