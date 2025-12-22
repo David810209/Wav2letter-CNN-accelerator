@@ -264,17 +264,17 @@ inline void ConvPerChannel(
       start_time = perf_get_mcycle64();
       const int8_t* channel_ptr = kernel + (ndx * cast32_K);
       for(int i = 0;i < cast32_K;i+=32){
-        uint32_t filter = *reinterpret_cast<uint32_t*>(&channel_ptr[i]);
-        uint32_t filter2 = *reinterpret_cast<uint32_t*>(&channel_ptr[i+4]);
+        uint32_t filter = *reinterpret_cast<const uint32_t*>(&channel_ptr[i]);
+        uint32_t filter2 = *reinterpret_cast<const uint32_t*>(&channel_ptr[i+4]);
         cfu_op0(/* funct7= */ 1, /* in0= */ filter, /* in1= */ filter2);
-        filter = *reinterpret_cast<uint32_t*>(&channel_ptr[i+8]);
-        filter2 = *reinterpret_cast<uint32_t*>(&channel_ptr[i+12]);
+        filter = *reinterpret_cast<const uint32_t*>(&channel_ptr[i+8]);
+        filter2 = *reinterpret_cast<const uint32_t*>(&channel_ptr[i+12]);
         cfu_op0(/* funct7= */ 1, /* in0= */ filter, /* in1= */ filter2);
-        filter = *reinterpret_cast<uint32_t*>(&channel_ptr[i+16]);
-        filter2 = *reinterpret_cast<uint32_t*>(&channel_ptr[i+20]);
+        filter = *reinterpret_cast<const uint32_t*>(&channel_ptr[i+16]);
+        filter2 = *reinterpret_cast<const uint32_t*>(&channel_ptr[i+20]);
         cfu_op0(/* funct7= */ 1, /* in0= */ filter, /* in1= */ filter2);
-        filter = *reinterpret_cast<uint32_t*>(&channel_ptr[i+24]);
-        filter2 = *reinterpret_cast<uint32_t*>(&channel_ptr[i+28]);
+        filter = *reinterpret_cast<const uint32_t*>(&channel_ptr[i+24]);
+        filter2 = *reinterpret_cast<const uint32_t*>(&channel_ptr[i+28]);
         cfu_op0(/* funct7= */ 1, /* in0= */ filter, /* in1= */ filter2);
       }
       end_time = perf_get_mcycle64();
