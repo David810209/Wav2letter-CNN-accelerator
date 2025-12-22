@@ -25,14 +25,14 @@ The target workload for this accelerator is a quantized and pruned version of th
 - To set up the project, run the following commands:
 
 ### 1.
-
+in CFU-Playground/proj directory:
 ```bash
-cd CFU-Playground/proj
 git clone https://github.com/David810209/Sparse-CNN-accelerator
 cd Sparse-CNN-accelerator/src/wav2letter/model
 wget https://github.com/ARM-software/ML-Zoo/raw/master/models/speech_recognition/wav2letter/tflite_pruned_int8/wav2letter_pruned_int8.tflite
 chmod +x model_convert.sh
 ./model_convert.sh
+python3 gen_weights_header32.py
 cd ../../../
 make prog USEVIVADO=1 EXTRA_LITEX_ARGS="--cpu-variant=perf+cfu" TTY=/dev/ttyUSB0
 make load BUILD_JOBS=4 TTY=/dev/ttyUSB1
@@ -63,7 +63,7 @@ Close the litex-term terminal
 ### 4.
 
 ```bash
-python eval.py --port /dev/ttyUSB1
+python3 eval.py --port /dev/ttyUSB1
 ```
 
 ## Contributions

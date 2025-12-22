@@ -23,6 +23,8 @@ limitations under the License.
 #include "cfu.h"
 #include "perf.h"
 #include <cstdio>
+#include "weights_data.h"
+static int current_conv_layer_id = 0;
 namespace tflite {
 namespace reference_integer_ops {
 
@@ -39,9 +41,21 @@ inline void ConvPerChannel(
       uint64_t total_start_time = perf_get_mcycle64();
   const int K_max = 8000; // filter_w * filter_h * input_depth. -> max(layer # 2) = 1 * 1 * 300 = 300
   const int M_max = 148; // out_w * out_h. -> max(layer # 1) = 45 * 18 = 810
-  const int N_max = 2000; // out_ch -> max(layer #1) = 300
+  // const int N_max = 2000; // out_ch -> max(layer #1) = 300
   alignas(4) int8_t im2col[M_max][K_max];
-  alignas(4) int8_t kernel[N_max][K_max];
+  // alignas(4) int8_t kernel[N_max][K_max];
+  static const int8_t* all_layer_weights[] = {
+    &conv_layer_0_weights[0][0], &conv_layer_1_weights[0][0],
+    &conv_layer_2_weights[0][0], &conv_layer_3_weights[0][0],
+    &conv_layer_4_weights[0][0], &conv_layer_5_weights[0][0],
+    &conv_layer_6_weights[0][0], &conv_layer_7_weights[0][0],
+    &conv_layer_8_weights[0][0], &conv_layer_9_weights[0][0],
+    &conv_layer_10_weights[0][0]
+};
+  const int8_t* kernel = all_layer_weights[current_conv_layer_id];
+  current_conv_layer_id++;
+  if(current_conv_layer_id == 11) current_conv_layer_id = 0;
+
   // Get parameters.
   const int32_t input_offset = params.input_offset;  // r = s(q - Z)
   const int stride_width = params.stride_width;
@@ -152,45 +166,31 @@ inline void ConvPerChannel(
   end_time = perf_get_mcycle64();
   convert_image_time += end_time - start_time;
   // convert filter
-  start_time = perf_get_mcycle64();
-  int filter_j = 0; // output_depth
-  for(int out_channel = 0; out_channel < output_depth;++out_channel){
-    int filter_i = 0; // filter_w * filter_h * input_depth
-    for (int filter_y = 0; filter_y < filter_height; ++filter_y) {
-      for (int filter_x = 0; filter_x < filter_width; ++filter_x) {
+  // start_time = perf_get_mcycle64();
+  // int filter_j = 0; // output_depth
+  // for(int out_channel = 0; out_channel < output_depth;++out_channel){
+  //   int filter_i = 0; // filter_w * filter_h * input_depth
+  //   for (int filter_y = 0; filter_y < filter_height; ++filter_y) {
+  //     for (int filter_x = 0; filter_x < filter_width; ++filter_x) {
 
-        for (int in_channel = 0; in_channel < filter_input_depth;
-              ++in_channel) {
-          kernel[filter_j][filter_i++] = static_cast<int8_t>(filter_data[Offset(
-              filter_shape, out_channel, filter_y, filter_x, in_channel)]);
-        }
-      }
-    }
-    filter_j++;
-  } 
-  if(K == 1750){
-      for(int i = 0;i < N;i++){ 
-        for(int j = 1750;j < 1760;j++){ 
-          kernel[i][j] = 0; 
-        }
-     }
-  }
-  else if(K == 1872){
-      for(int i = 0;i < N;i++){ 
-        for(int j = 1872;j < 1888;j++){ 
-          kernel[i][j] = 0; 
-        }
-     }
-  }
-  else if(K == 2000){
-      for(int i = 0;i < N;i++){ 
-        for(int j = 2000;j < 2016;j++){ 
-          kernel[i][j] = 0; 
-        }
-     }
-  }
-  end_time = perf_get_mcycle64();
-  convert_filter_time += end_time - start_time;
+  //       for (int in_channel = 0; in_channel < filter_input_depth;
+  //             ++in_channel) {
+  //         kernel[filter_j][filter_i++] = static_cast<int8_t>(filter_data[Offset(
+  //             filter_shape, out_channel, filter_y, filter_x, in_channel)]);
+  //       }
+  //     }
+  //   }
+  //   filter_j++;
+  // } 
+  // if(K == 1750){
+  //     for(int i = 0;i < N;i++){ 
+  //       for(int j = 1750;j < 1752;j++){ 
+  //         kernel[i][j] = 0; 
+  //       }
+  //    }
+  // }
+  // end_time = perf_get_mcycle64();
+  // convert_filter_time += end_time - start_time;
 
   printf("convert image took: ");
   perf_print_value(convert_image_time);
@@ -262,18 +262,19 @@ inline void ConvPerChannel(
     image_load_time += end_time - start_time;
     for(int ndx = 0;ndx < N;ndx++){
       start_time = perf_get_mcycle64();
+      const int8_t* channel_ptr = kernel + (ndx * cast32_K);
       for(int i = 0;i < cast32_K;i+=32){
-        uint32_t filter = *reinterpret_cast<uint32_t*>(&kernel[ndx][i]);
-        uint32_t filter2 = *reinterpret_cast<uint32_t*>(&kernel[ndx][i+4]);
+        uint32_t filter = *reinterpret_cast<uint32_t*>(&channel_ptr[i]);
+        uint32_t filter2 = *reinterpret_cast<uint32_t*>(&channel_ptr[i+4]);
         cfu_op0(/* funct7= */ 1, /* in0= */ filter, /* in1= */ filter2);
-        filter = *reinterpret_cast<uint32_t*>(&kernel[ndx][i+8]);
-        filter2 = *reinterpret_cast<uint32_t*>(&kernel[ndx][i+12]);
+        filter = *reinterpret_cast<uint32_t*>(&channel_ptr[i+8]);
+        filter2 = *reinterpret_cast<uint32_t*>(&channel_ptr[i+12]);
         cfu_op0(/* funct7= */ 1, /* in0= */ filter, /* in1= */ filter2);
-        filter = *reinterpret_cast<uint32_t*>(&kernel[ndx][i+16]);
-        filter2 = *reinterpret_cast<uint32_t*>(&kernel[ndx][i+20]);
+        filter = *reinterpret_cast<uint32_t*>(&channel_ptr[i+16]);
+        filter2 = *reinterpret_cast<uint32_t*>(&channel_ptr[i+20]);
         cfu_op0(/* funct7= */ 1, /* in0= */ filter, /* in1= */ filter2);
-        filter = *reinterpret_cast<uint32_t*>(&kernel[ndx][i+24]);
-        filter2 = *reinterpret_cast<uint32_t*>(&kernel[ndx][i+28]);
+        filter = *reinterpret_cast<uint32_t*>(&channel_ptr[i+24]);
+        filter2 = *reinterpret_cast<uint32_t*>(&channel_ptr[i+28]);
         cfu_op0(/* funct7= */ 1, /* in0= */ filter, /* in1= */ filter2);
       }
       end_time = perf_get_mcycle64();
