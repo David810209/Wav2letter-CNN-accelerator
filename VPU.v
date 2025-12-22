@@ -37,13 +37,13 @@ output           busy;
 
 output           A_wr_en;
 output reg [15:0]    A_index;
-output [127:0]    A_data_in;
-input  [127:0]    A_data_out;
+output [255:0]    A_data_in;
+input  [255:0]    A_data_out;
 
 output           B_wr_en;
 output reg [15:0]    B_index;
-output [127:0]    B_data_in;
-input  [127:0]    B_data_out;
+output [255:0]    B_data_in;
+input  [255:0]    B_data_out;
 
 output reg      C_wr_en;
 output reg [15:0]    C_index;
@@ -78,9 +78,9 @@ always @(posedge clk or negedge rst_n) begin
         A_sz <= 0;
     end
     else if(state == IDLE && in_valid) begin
-        K_reg <= (K >> 4);
+        K_reg <= (K >> 5);
         M_reg_div_4 <= (M) >> 2;
-        A_sz <= (M_x_K) >> 4;
+        A_sz <= (M_x_K) >> 5;
     end
     else begin
         K_reg <= K_reg;
@@ -140,7 +140,7 @@ always @(posedge clk or negedge rst_n) begin
     end
 end
 
-reg [127:0] A_reg, B_reg;
+reg [255:0] A_reg, B_reg;
 always @(posedge clk or negedge rst_n) begin
     if(!rst_n) begin
         A_reg <= 0;
@@ -154,7 +154,10 @@ end
 
 // stage 2 compute
 reg signed [31:0] output_buffer;
-wire signed [15:0] prod_0, prod_1, prod_2, prod_3, prod_4, prod_5, prod_6, prod_7, prod_8, prod_9, prod_10, prod_11, prod_12, prod_13, prod_14, prod_15;
+wire signed [15:0] prod_0, prod_1, prod_2, prod_3, prod_4, prod_5, prod_6, prod_7,
+                     prod_8, prod_9, prod_10, prod_11, prod_12, prod_13, prod_14, prod_15,
+                     prod_16, prod_17, prod_18, prod_19, prod_20, prod_21, prod_22, prod_23,
+                     prod_24, prod_25, prod_26, prod_27, prod_28, prod_29, prod_30, prod_31;
 assign prod_0 =  ($signed(A_reg[7 : 0]) + input_offset)
                 * $signed(B_reg[7 : 0]);
 assign prod_1 =  ($signed(A_reg[15: 8]) + input_offset)
@@ -187,9 +190,43 @@ assign prod_14 =  ($signed(A_reg[119:112]) + input_offset)
                 * $signed(B_reg[119:112]);
 assign prod_15 =  ($signed(A_reg[127:120]) + input_offset)
                 * $signed(B_reg[127:120]);
+assign prod_16 =  ($signed(A_reg[135:128]) + input_offset)
+                * $signed(B_reg[135:128]);
+assign prod_17 =  ($signed(A_reg[143:136]) + input_offset)
+                * $signed(B_reg[143:136]);
+assign prod_18 =  ($signed(A_reg[151:144]) + input_offset)
+                * $signed(B_reg[151:144]);
+assign prod_19 =  ($signed(A_reg[159:152]) + input_offset)
+                * $signed(B_reg[159:152]);
+assign prod_20 =  ($signed(A_reg[167:160]) + input_offset)
+                * $signed(B_reg[167:160]);
+assign prod_21 =  ($signed(A_reg[175:168]) + input_offset)
+                * $signed(B_reg[175:168]);
+assign prod_22 =  ($signed(A_reg[183:176]) + input_offset)
+                * $signed(B_reg[183:176]);
+assign prod_23 =  ($signed(A_reg[191:184]) + input_offset)
+                * $signed(B_reg[191:184]);
+assign prod_24 =  ($signed(A_reg[199:192]) + input_offset)
+                * $signed(B_reg[199:192]);
+assign prod_25 =  ($signed(A_reg[207:200]) + input_offset)
+                * $signed(B_reg[207:200]);
+assign prod_26 =  ($signed(A_reg[215:208]) + input_offset)
+                * $signed(B_reg[215:208]);
+assign prod_27 =  ($signed(A_reg[223:216]) + input_offset)
+                * $signed(B_reg[223:216]);
+assign prod_28 =  ($signed(A_reg[231:224]) + input_offset)
+                * $signed(B_reg[231:224]);
+assign prod_29 =  ($signed(A_reg[239:232]) + input_offset)
+                * $signed(B_reg[239:232]);
+assign prod_30 =  ($signed(A_reg[247:240]) + input_offset)
+                * $signed(B_reg[247:240]);
+assign prod_31 =  ($signed(A_reg[255:248]) + input_offset)
+                * $signed(B_reg[255:248]);
 wire signed [31:0] sum_prods;
 assign sum_prods = prod_0 + prod_1 + prod_2 + prod_3 + prod_4 + prod_5 + prod_6 + prod_7 +
-                   prod_8 + prod_9 + prod_10 + prod_11 + prod_12 + prod_13 + prod_14 + prod_15;
+                   prod_8 + prod_9 + prod_10 + prod_11 + prod_12 + prod_13 + prod_14 + prod_15
+                     + prod_16 + prod_17 + prod_18 + prod_19 + prod_20 + prod_21 + prod_22 + prod_23
+                     + prod_24 + prod_25 + prod_26 + prod_27 + prod_28 + prod_29 + prod_30 + prod_31;
 reg done_reg;
 always @(posedge clk or negedge rst_n) begin
     if(!rst_n) begin

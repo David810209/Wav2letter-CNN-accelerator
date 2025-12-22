@@ -42,16 +42,16 @@ wire            busy;
 wire            A_wr_en;
 wire [15:0]     A_index;
 reg [15:0]      A_index_reg;
-wire [127:0]     A_data_in;
-wire [127:0]     A_data_out;
+wire [255:0]     A_data_in;
+wire [255:0]     A_data_out;
 wire [15:0]     A_index_TPU;
 
 wire            B_wr_en;
 wire [15:0]     B_index;
 reg [15:0]      B_index_reg;
 wire [15:0]     B_index_TPU;
-wire [127:0]     B_data_in;
-wire [127:0]     B_data_out;
+wire [255:0]     B_data_in;
+wire [255:0]     B_data_out;
 wire            C_wr_en;
 wire [15:0]     C_index;
 wire [15:0]     C_index_TPU;
@@ -73,8 +73,8 @@ always @(posedge clk or posedge reset)begin
   end
   else begin
     K_x_M <= M * K;
-    A_size <= K_x_M >> 4;
-    B_size <= K >> 4;
+    A_size <= K_x_M >> 5;
+    B_size <= K >> 5;
     C_size <= M >> 2;
   end
 end
@@ -147,15 +147,15 @@ assign rsp_valid = (state == INPUT_A || state == INPUT_B || rsp_valid_reg == 1 |
 assign cmd_ready = state != COMPUTE;
 
 
-reg [63:0] temp_dataA_in;
-reg A_in_reg;
+reg [191:0] temp_dataA_in;
+reg [1:0] A_in_reg;
 always @(posedge clk or posedge reset) begin
   if (reset) begin
     A_in_reg <= 0;
     temp_dataA_in <= 0;
   end else if(next_state == INPUT_A && A_index_reg < A_size) begin
     if(cmd_valid && func == 0) begin
-      temp_dataA_in <= {cmd_payload_inputs_0, cmd_payload_inputs_1};
+      temp_dataA_in <= {cmd_payload_inputs_0, cmd_payload_inputs_1, temp_dataA_in[191:64]};
       A_in_reg <= A_in_reg + 1;
     end else begin
       A_in_reg <= A_in_reg;
@@ -170,7 +170,7 @@ always @(posedge clk or posedge reset) begin
   if (reset) begin
     A_index_reg <= 0;
   end else if(next_state == INPUT_A && A_index_reg < A_size) begin
-    if(cmd_valid && func == 0 && A_in_reg == 1) begin
+    if(cmd_valid && func == 0 && A_in_reg == 3) begin
       A_index_reg <= A_index_reg + 1;
     end else begin
       A_index_reg <= A_index_reg;
@@ -179,18 +179,18 @@ always @(posedge clk or posedge reset) begin
     A_index_reg <= 0;
   end
 end
-assign A_wr_en = A_index_reg < A_size && cmd_valid && func == 0 && A_in_reg == 1;
+assign A_wr_en = A_index_reg < A_size && cmd_valid && func == 0 && A_in_reg == 3;
 assign A_data_in = {temp_dataA_in, cmd_payload_inputs_0, cmd_payload_inputs_1};
 
-reg [63:0] temp_dataB_in;
-reg B_in_reg;
+reg [191:0] temp_dataB_in;
+reg [1:0] B_in_reg;
 always @(posedge clk or posedge reset) begin
   if (reset) begin
     B_in_reg <= 0;
     temp_dataB_in <= 0;
   end else if(next_state == INPUT_B && B_index_reg < B_size) begin
     if(cmd_valid && func == 1) begin
-      temp_dataB_in <= {cmd_payload_inputs_0, cmd_payload_inputs_1};
+      temp_dataB_in <= {cmd_payload_inputs_0, cmd_payload_inputs_1, temp_dataB_in[191:64]};
       B_in_reg <= B_in_reg + 1;
     end else begin
       B_in_reg <= B_in_reg;
@@ -205,7 +205,7 @@ always @(posedge clk or posedge reset) begin
   if (reset) begin
     B_index_reg <= 0;
   end else if(next_state == INPUT_B && B_index_reg < B_size) begin
-    if(cmd_valid && func == 1 && B_in_reg == 1) begin
+    if(cmd_valid && func == 1 && B_in_reg == 3) begin
       B_index_reg <= B_index_reg + 1;
     end else begin
       B_index_reg <= B_index_reg;
@@ -214,7 +214,7 @@ always @(posedge clk or posedge reset) begin
     B_index_reg <= 0;
   end
 end
-assign B_wr_en = B_index_reg < B_size && cmd_valid && func== 1 && B_in_reg == 1;
+assign B_wr_en = B_index_reg < B_size && cmd_valid && func== 1 && B_in_reg == 3;
 assign B_data_in = {temp_dataB_in, cmd_payload_inputs_0, cmd_payload_inputs_1};
 
 reg [1:0] out_cnt;
@@ -270,8 +270,8 @@ assign B_index = B_wr_en ? B_index_reg : B_index_TPU;
 assign C_index = C_wr_en ? C_index_TPU : C_index_reg;
 
 global_buffer_bram #(
-    .ADDR_BITS(14),
-    .DATA_BITS(128)
+    .ADDR_BITS(13),
+    .DATA_BITS(256)
 )
 gbuff_A(
     .clk(clk),
@@ -284,8 +284,8 @@ gbuff_A(
 );
 
 global_buffer_bram #(
-    .ADDR_BITS(9),
-    .DATA_BITS(128)
+    .ADDR_BITS(8),
+    .DATA_BITS(256)
 ) gbuff_B(
     .clk(clk),
     .rst_n(~reset),

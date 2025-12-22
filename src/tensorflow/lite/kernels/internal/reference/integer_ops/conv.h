@@ -82,7 +82,7 @@ inline void ConvPerChannel(
   int M = output_height * output_width;
   int N = output_depth;
   int K = filter_height * filter_width * filter_input_depth;
-  int cast16_K = (K + 15) /16 *16;
+  int cast32_K = (K + 31) /32 *32;
   uint64_t filter_load_time = 0;
   uint64_t image_load_time = 0;
   uint64_t compute_and_out_time = 0;
@@ -135,6 +135,20 @@ inline void ConvPerChannel(
       }
     }
   }
+  else if(K == 1872){
+    for(int i = 0;i < M;i++){
+      for(int j = 1872;j < 1888;j++){
+        im2col[i][j] = 0;
+      }
+    }
+  }
+  else if(K == 2000){
+    for(int i = 0;i < M;i++){
+      for(int j = 2000;j < 2016;j++){
+        im2col[i][j] = 0;
+      }
+    }
+  }
   end_time = perf_get_mcycle64();
   convert_image_time += end_time - start_time;
   // convert filter
@@ -157,6 +171,20 @@ inline void ConvPerChannel(
   if(K == 1750){
       for(int i = 0;i < N;i++){ 
         for(int j = 1750;j < 1760;j++){ 
+          kernel[i][j] = 0; 
+        }
+     }
+  }
+  else if(K == 1872){
+      for(int i = 0;i < N;i++){ 
+        for(int j = 1872;j < 1888;j++){ 
+          kernel[i][j] = 0; 
+        }
+     }
+  }
+  else if(K == 2000){
+      for(int i = 0;i < N;i++){ 
+        for(int j = 2000;j < 2016;j++){ 
           kernel[i][j] = 0; 
         }
      }
@@ -212,15 +240,21 @@ inline void ConvPerChannel(
     if(M_tile_factor == 1)M_tile = M;
     else if(M_tile_factor == 5) M_tile = idx == 4 ? 20 : 32;
     else M_tile = idx == 0 ? 76 : 72;
-    cfu_op0(/* funct7= */ 3, /* in0= */M_tile, /* in1= */ cast16_K);
+    cfu_op0(/* funct7= */ 3, /* in0= */M_tile, /* in1= */ cast32_K);
     start_time = perf_get_mcycle64();
     for(int i = M_start_idx;i < M_start_idx + M_tile;i++){
-      for(int j = 0;j < cast16_K;j+=16){
+      for(int j = 0;j < cast32_K;j+=32){
         uint32_t img =  *reinterpret_cast<uint32_t*>(&im2col[i][j]);
         uint32_t img2 =  *reinterpret_cast<uint32_t*>(&im2col[i][j+4]);
         cfu_op0(/* funct7= */ 0, /* in0= */ img, /* in1= */ img2);
         img =  *reinterpret_cast<uint32_t*>(&im2col[i][j+8]);
         img2 =  *reinterpret_cast<uint32_t*>(&im2col[i][j+12]);
+        cfu_op0(/* funct7= */ 0, /* in0= */ img, /* in1= */ img2);
+        img =  *reinterpret_cast<uint32_t*>(&im2col[i][j+16]);
+        img2 =  *reinterpret_cast<uint32_t*>(&im2col[i][j+20]);
+        cfu_op0(/* funct7= */ 0, /* in0= */ img, /* in1= */ img2);
+        img =  *reinterpret_cast<uint32_t*>(&im2col[i][j+24]);
+        img2 =  *reinterpret_cast<uint32_t*>(&im2col[i][j+28]);
         cfu_op0(/* funct7= */ 0, /* in0= */ img, /* in1= */ img2);
       }
     }
@@ -228,12 +262,18 @@ inline void ConvPerChannel(
     image_load_time += end_time - start_time;
     for(int ndx = 0;ndx < N;ndx++){
       start_time = perf_get_mcycle64();
-      for(int i = 0;i < cast16_K;i+=16){
+      for(int i = 0;i < cast32_K;i+=32){
         uint32_t filter = *reinterpret_cast<uint32_t*>(&kernel[ndx][i]);
         uint32_t filter2 = *reinterpret_cast<uint32_t*>(&kernel[ndx][i+4]);
         cfu_op0(/* funct7= */ 1, /* in0= */ filter, /* in1= */ filter2);
         filter = *reinterpret_cast<uint32_t*>(&kernel[ndx][i+8]);
         filter2 = *reinterpret_cast<uint32_t*>(&kernel[ndx][i+12]);
+        cfu_op0(/* funct7= */ 1, /* in0= */ filter, /* in1= */ filter2);
+        filter = *reinterpret_cast<uint32_t*>(&kernel[ndx][i+16]);
+        filter2 = *reinterpret_cast<uint32_t*>(&kernel[ndx][i+20]);
+        cfu_op0(/* funct7= */ 1, /* in0= */ filter, /* in1= */ filter2);
+        filter = *reinterpret_cast<uint32_t*>(&kernel[ndx][i+24]);
+        filter2 = *reinterpret_cast<uint32_t*>(&kernel[ndx][i+28]);
         cfu_op0(/* funct7= */ 1, /* in0= */ filter, /* in1= */ filter2);
       }
       end_time = perf_get_mcycle64();
