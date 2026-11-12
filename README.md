@@ -3,6 +3,10 @@
 This repository presents a convolutional neural network accelerator implemented on top of the CFU-Playground framework.  
 The project is developed as the final project for the course **“Accelerator Architectures for Machine Learning”**, with a focus on efficient execution of CNN workloads.
   
+## Project Report
+
+For implementation details and experimental results, see the [Project Report](./wav2letter_accelerator_report.pdf).
+
 ## Setup
 
 - First, obtain a Digilent Nexys4DDR or Arty A7-100T FPGA board, connect it to your computer, and install Vivado.
